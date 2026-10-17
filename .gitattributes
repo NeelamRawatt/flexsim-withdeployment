@@ -1,0 +1,32 @@
+# =====================================================================
+# .gitattributes = special rules for some files.
+# Goal: the SAME file content on every computer, and on the Linux servers.
+# "eol=lf" means: always use Linux line endings.
+# =====================================================================
+
+# Let Git decide for normal text files.
+* text=auto
+
+# Files that run on Linux MUST have Linux line endings.
+*.sh        text eol=lf
+mvnw        text eol=lf
+Dockerfile  text eol=lf
+
+# Code, config and SQL: same on every computer.
+*.java       text eol=lf
+*.sql        text eol=lf
+*.properties text eol=lf
+*.yml        text eol=lf
+*.yaml       text eol=lf
+*.xml        text eol=lf
+*.json       text eol=lf
+*.md         text eol=lf
+
+# Windows-only scripts keep Windows line endings.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Pictures are not text: Git must not touch them.
+*.png binary
+*.jpg binary
+*.ico binary

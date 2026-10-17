@@ -1,0 +1,63 @@
+# =====================================================================
+# .gitignore = a list of files Git must NEVER save.
+# Three reasons: secrets (a leak is a security incident), files that the build
+# makes again (saving them is waste), and personal files of your computer.
+# A line starting with # is a comment. "/" at the end means a folder.
+# =====================================================================
+
+# ---- 1. SECRETS (the most important part) ----------------------------
+# Real passwords live in .env files. They must never reach Git.
+.env
+.env.*
+# "!" means "except": the example file has NO real secrets, so we DO save it.
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+application-local.properties
+# Terraform (Step 12): its state file contains secrets, and its variable files hold passwords.
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+# Kubernetes access file
+kubeconfig*
+
+# ---- 2. REAL DATA ----------------------------------------------------
+# Database dumps contain real customer data. Never save them in Git.
+*.dump
+*.backup
+
+# ---- 3. JAVA / MAVEN build output (made again on every build) --------
+target/
+*.class
+*.jar
+*.war
+# Exception: the Maven wrapper needs its own small jar, so we DO save that one.
+!.mvn/wrapper/maven-wrapper.jar
+HELP.md
+
+# ---- 4. REACT / NODE -------------------------------------------------
+node_modules/
+build/
+dist/
+npm-debug.log*
+
+# ---- 5. EDITORS AND OPERATING SYSTEM ---------------------------------
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.DS_Store
+Thumbs.db
+
+# ---- 6. LOGS ---------------------------------------------------------
+*.log
+logs/
+
+# ---- 7. Claude Code personal settings --------------------------------
+.claude/settings.local.json
