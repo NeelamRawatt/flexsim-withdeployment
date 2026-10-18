@@ -68,6 +68,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
                         // Kubernetes asks these pages "are you alive?".
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                        // "/error" is the page Spring uses INTERNALLY to send an error answer
+                        // (403, 404, 409...). It must be open. If it needs a login, every error
+                        // turns into a wrong 401. The real status code is kept.
+                        .requestMatchers("/error").permitAll()
                         // Everything else (/api/auth/me, /api/users/...) needs a login.
                         // Role checks are written on the controller methods (batch C).
                         .anyRequest().authenticated()
