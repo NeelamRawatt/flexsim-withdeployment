@@ -1,0 +1,42 @@
+name: flexsim-platform
+
+services:
+  postgres:
+  # Pinned to version 16 (the same major version as Azure). Never use "latest" in production:
+    # it can change under you and break the system on the day you deploy.
+    image: postgres:16
+    container_name: flexsim-postgres
+    # If Docker or the computer restarts, start the database again by itself.
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in infra/docker.env}
+       # One password per service user. The script in init-db uses them.
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?Set AUTH_DB_PASSWORD in infra/docker/.env}
+      EXPERIMENT_DB_PASSWORD: ${EXPERIMENT_DB_PASSWORD:?Set EXPERIMENT_DB_PASSWORD in infra/docker/.env}
+      SIMULATION_DB_PASSWORD: ${SIMULATION_DB_PASSWORD:?Set SIMULATION_DB_PASSWORD in infra/docker/.env}
+      KPI_DB_PASSWORD: ${KPI_DB_PASSWORD:?Set KPI_DB_PASSWORD in infra/docker/.env}
+      FILE_DB_PASSWORD: ${FILE_DB_PASSWORD:?Set FILE_DB_PASSWORD in infra/docker/.env}
+      AI_DB_PASSWORD: ${AI_DB_PASSWORD:?Set AI_DB_PASSWORD in infra/docker/.env}
+    ports:
+      # left side  = the door on YOUR computer, right side = the door inside the container.
+      # 127.0.0.1 means: only programs on THIS computer may connect. Nobody on the
+      # network can reach the database. (Safer. Never open a database to everyone.)
+      # We use 5433 because a PostgreSQL installed on Windows may already use 5432.
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - flexsim_pgdata:/var/lib/postgresql/data
+      # The database files live here, so the data survives container restarts.
+      - flexsim_pgdata:/var/lib/postgresql/data
+      # THE LINE THAT WAS MISSING: connect our init-db folder to the place where
+      # PostgreSQL looks for start-up scripts. The scripts run ONE time, when the
+      # database is created for the first time. ":ro" = read only.
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Docker asks the database "are you ready?" every 10 seconds.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  flexsim_pgdata:
