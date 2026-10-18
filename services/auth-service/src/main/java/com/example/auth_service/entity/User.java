@@ -46,12 +46,12 @@ public class User {
     private String role;
 
     // Runs automatically just before saving a new or changed user.
-    // If no role was given, we use ADMIN (same behaviour as the old app).
+    // If no role was given, we use VIEWER (least privilege: the smallest power by default).
     @PrePersist
     @PreUpdate
     public void applyDefaults() {
         if (role == null || role.isBlank()) {
-            role = "ADMIN";
+            role = "VIEWER";
         }
     }
 
