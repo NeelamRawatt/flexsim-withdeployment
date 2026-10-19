@@ -1,0 +1,11 @@
+# .dockerignore = files that are NOT sent to Docker when it builds the image.
+# Most important: .env (your secrets) must NEVER go inside an image.
+.env
+.env.*
+!.env.example
+target/
+.git/
+.idea/
+.vscode/
+*.log
+*.md

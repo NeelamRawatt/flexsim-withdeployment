@@ -1,0 +1,60 @@
+# =====================================================================
+# docker-compose.services.yml  =  adds OUR OWN services (as containers) next to the database.
+#
+# Use it together with the main file. From the folder infra\docker run:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.services.yml up -d --build
+#
+#   -f ... -f ...  = read both files as one recipe
+#   up -d          = start everything in the background
+#   --build        = build the images from the Dockerfiles first
+#
+# SECRETS: each service reads its OWN .env file (env_file). The secrets are not written here.
+# But that .env is made for running on your laptop (POSTGRES_HOST=localhost, port 5433).
+# Inside Docker, the database is reached by the name "postgres" on port 5432.
+# So the "environment:" lines below REPLACE those two values. (environment wins over env_file.)
+# =====================================================================
+services:
+  auth-service:
+    build:
+      context: ../../services/auth-service
+    container_name: flexsim-auth-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy      # wait until the database says "ready"
+    env_file:
+      - ../../services/auth-service/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s                 # Spring Boot needs some time to start
+
+  experiment-service:
+    build:
+      context: ../../services/experiment-service
+    container_name: flexsim-experiment-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../../services/experiment-service/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
