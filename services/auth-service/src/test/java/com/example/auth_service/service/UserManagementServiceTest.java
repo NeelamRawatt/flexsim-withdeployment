@@ -1,8 +1,11 @@
 package com.example.auth_service.service;
 
+import com.example.auth_service.dto.ChangeOwnPasswordRequestDTO;
 import com.example.auth_service.dto.CreateManagedUserRequestDTO;
 import com.example.auth_service.dto.ManagedUserResponseDTO;
+import com.example.auth_service.dto.UpdateManagedUserPasswordRequestDTO;
 import com.example.auth_service.entity.User;
+import com.example.auth_service.repository.RefreshTokenRepository;
 import com.example.auth_service.repository.UserLoginRepository;
 import com.example.auth_service.security.AppUserPrincipal;
 import com.example.auth_service.security.PasswordService;
@@ -16,6 +19,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,14 +45,17 @@ class UserManagementServiceTest {
     private UserLoginRepository userLoginRepository;
     @Mock
     private SecurityAuditService securityAuditService;
+    @Mock
+    private RefreshTokenRepository refreshTokenRepository;
 
     private UserManagementService service;
+    private PasswordService passwordService;
 
     @BeforeEach
     void setUp() {
         // PasswordService is real (it only needs the fake repository).
-        PasswordService passwordService = new PasswordService();
-        service = new UserManagementService(userLoginRepository, passwordService, securityAuditService);
+        passwordService = new PasswordService();
+        service = new UserManagementService(userLoginRepository, passwordService, securityAuditService, refreshTokenRepository);
     }
 
     private User user(Long id, String username, String role) {
@@ -169,5 +176,50 @@ class UserManagementServiceTest {
         assertThatThrownBy(() -> service.createManagedUser(null, request("bob", "VIEWER")))
                 .isInstanceOf(ResponseStatusException.class)
                 .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode().value()).isEqualTo(401));
+    }
+
+    @Test
+    @DisplayName("changing your own password cancels all your refresh tokens")
+    void changeOwnPasswordRevokesRefreshTokens() {
+        User me = new User("bob", passwordService.encodePassword("OldPass@1"), "OPERATOR");
+        me.setId(7L);
+        when(userLoginRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(me));
+
+        service.changeOwnPassword(loggedInAs("bob", "OPERATOR"),
+                new ChangeOwnPasswordRequestDTO("OldPass@1", "NewPass@1"));
+
+        verify(userLoginRepository).save(me);
+        verify(refreshTokenRepository).revokeActiveTokens(eq(me), any(Instant.class));
+        assertThat(passwordService.matches(me, "NewPass@1")).isTrue();
+    }
+
+    @Test
+    @DisplayName("a wrong current password changes nothing and cancels no tokens")
+    void wrongCurrentPasswordRevokesNothing() {
+        User me = new User("bob", passwordService.encodePassword("OldPass@1"), "OPERATOR");
+        me.setId(7L);
+        when(userLoginRepository.findByUsernameIgnoreCase("bob")).thenReturn(Optional.of(me));
+
+        assertThatThrownBy(() -> service.changeOwnPassword(loggedInAs("bob", "OPERATOR"),
+                new ChangeOwnPasswordRequestDTO("WrongPass", "NewPass@1")))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode().value()).isEqualTo(400));
+
+        verify(userLoginRepository, never()).save(any(User.class));
+        verify(refreshTokenRepository, never()).revokeActiveTokens(any(User.class), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("an admin resetting a user's password cancels that user's refresh tokens")
+    void resetPasswordRevokesRefreshTokens() {
+        User operator = user(5L, "bob", "OPERATOR");
+        when(userLoginRepository.findById(5L)).thenReturn(Optional.of(operator));
+
+        service.updateManagedUserPassword(loggedInAs("admin1", "ADMIN"), 5L,
+                new UpdateManagedUserPasswordRequestDTO("Reset@123"));
+
+        verify(userLoginRepository).save(operator);
+        verify(refreshTokenRepository).revokeActiveTokens(eq(operator), any(Instant.class));
+        verify(securityAuditService).record(eq("admin1"), eq("RESET_USER_PASSWORD"), any(String.class));
     }
 }

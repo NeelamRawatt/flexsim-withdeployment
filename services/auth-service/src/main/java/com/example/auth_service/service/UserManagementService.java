@@ -6,14 +6,17 @@ import com.example.auth_service.dto.ManagedUserResponseDTO;
 import com.example.auth_service.dto.UpdateManagedUserPasswordRequestDTO;
 import com.example.auth_service.dto.UpdateManagedUserRoleRequestDTO;
 import com.example.auth_service.entity.User;
+import com.example.auth_service.repository.RefreshTokenRepository;
 import com.example.auth_service.repository.UserLoginRepository;
 import com.example.auth_service.security.AppUserPrincipal;
 import com.example.auth_service.security.PasswordService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -23,6 +26,10 @@ import java.util.Set;
  *  - usernames must be unique;
  *  - only OPERATOR and VIEWER users can be deleted or get a new role.
  * These rules are tested in UserManagementServiceTest.
+ *
+ * SECURITY RULE (added in the "fix it" step): when a password is changed or reset,
+ * ALL refresh tokens of that user are cancelled in the same database transaction.
+ * Why: a refresh token that was stolen before the password change must stop working.
  *
  * ResponseStatusException = how we send an error with a status code:
  *   400 Bad Request (wrong input), 401 not logged in, 404 not found, 409 Conflict (already exists).
@@ -36,15 +43,20 @@ public class UserManagementService {
     private final UserLoginRepository userLoginRepository;
     private final PasswordService passwordService;
     private final SecurityAuditService securityAuditService;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     public UserManagementService(UserLoginRepository userLoginRepository,
                                  PasswordService passwordService,
-                                 SecurityAuditService securityAuditService) {
+                                 SecurityAuditService securityAuditService,
+                                 RefreshTokenRepository refreshTokenRepository) {
         this.userLoginRepository = userLoginRepository;
         this.passwordService = passwordService;
         this.securityAuditService = securityAuditService;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
+    // @Transactional = the new password and the token cancel are saved together, or not at all.
+    @Transactional
     public void changeOwnPassword(Authentication authentication, ChangeOwnPasswordRequestDTO request) {
         AppUserPrincipal principal = requirePrincipal(authentication);
 
@@ -61,6 +73,8 @@ public class UserManagementService {
 
         user.setPassword(passwordService.encodePassword(request.newPassword()));
         userLoginRepository.save(user);
+        // Cancel every active refresh token of this user (old sessions must log in again).
+        refreshTokenRepository.revokeActiveTokens(user, Instant.now());
         securityAuditService.record(user.getUsername(), "PASSWORD_CHANGE", "Changed own password");
     }
 
@@ -142,6 +156,7 @@ public class UserManagementService {
         return toDto(saved);
     }
 
+    @Transactional
     public void updateManagedUserPassword(
             Authentication authentication,
             Long userId,
@@ -163,6 +178,8 @@ public class UserManagementService {
 
         user.setPassword(passwordService.encodePassword(request.newPassword()));
         userLoginRepository.save(user);
+        // Cancel every active refresh token of this user, so a stolen one stops working.
+        refreshTokenRepository.revokeActiveTokens(user, Instant.now());
 
         securityAuditService.record(principal.getUsername(), "RESET_USER_PASSWORD",
                 "Reset password for " + user.getUsername());
