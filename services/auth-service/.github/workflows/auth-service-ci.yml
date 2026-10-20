@@ -1,0 +1,60 @@
+# =====================================================================
+# auth-service-ci.yml  =  a GitHub Actions workflow (the robot's list of steps).
+# It builds auth-service and runs ALL its tests (unit tests + the real PostgreSQL test).
+# It runs only when files of THIS service (or this file) change.
+# =====================================================================
+name: auth-service CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "services/auth-service/**"
+      - ".github/workflows/auth-service-ci.yml"
+  pull_request:
+    paths:
+      - "services/auth-service/**"
+      - ".github/workflows/auth-service-ci.yml"
+
+# The robot's built-in key may only READ the code (least privilege).
+permissions:
+  contents: read
+
+# A new push cancels the older run of the same branch.
+concurrency:
+  group: auth-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest      # a clean Linux computer; Docker is already installed (needed by Testcontainers)
+    timeout-minutes: 20         # stop a stuck run
+    defaults:
+      run:
+        working-directory: services/auth-service
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Install Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven          # keeps downloaded libraries between runs (faster)
+
+      - name: Prepare Maven wrapper
+        # Windows does not mark mvnw as runnable and may save it with Windows line endings.
+        run: chmod +x mvnw && sed -i 's/\r$//' mvnw
+
+      - name: Build and test
+        # verify = compile + run all tests + build the .jar. One failing test stops the pipeline.
+        run: ./mvnw -B verify
+
+      - name: Upload test report
+        if: always()            # also when tests failed: that is when you need the report
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-service-test-report
+          path: services/auth-service/target/surefire-reports
+          if-no-files-found: ignore
