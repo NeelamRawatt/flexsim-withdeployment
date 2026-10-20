@@ -68,3 +68,22 @@ jobs:
 
       - name: Show the image
         run: docker image ls experiment-service
+
+      # ---------- Stage 3: security scan (report only for now) ----------
+      # Scan 1: libraries listed in pom.xml.
+      # --exit-code 0 = print findings, but never make the pipeline red.
+      # --ignore-unfixed = skip holes that have no fix yet.
+      - name: Scan libraries for known security holes
+        run: |
+          docker run --rm -v "$PWD":/project -w /project aquasec/trivy:0.57.1 \
+            fs --scanners vuln --severity HIGH,CRITICAL \
+            --ignore-unfixed --exit-code 0 .
+
+      # Scan 2: the Docker image we just built (Linux + Java + our app).
+      # The docker.sock mount lets Trivy see images on this computer.
+      - name: Scan the Docker image for known security holes
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.57.1 \
+            image --severity HIGH,CRITICAL \
+            --ignore-unfixed --exit-code 0 experiment-service:ci
