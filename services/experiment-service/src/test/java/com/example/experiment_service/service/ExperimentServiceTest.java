@@ -13,6 +13,7 @@ import com.example.experiment_service.dto.ExperimentDto;
 import com.example.experiment_service.dto.PageResponse;
 import com.example.experiment_service.entity.Experiment;
 import com.example.experiment_service.enums.ExperimentRunStatus;
+import com.example.experiment_service.event.ExperimentDeletedEvent;
 import com.example.experiment_service.mapper.ExperimentMapper;
 import com.example.experiment_service.repository.ExperimentRepository;
 import com.example.experiment_service.security.AuthenticatedUser;
@@ -45,12 +46,14 @@ class ExperimentServiceTest {
     private ExperimentRepository repository;
     @Mock
     private ExperimentMapper mapper;
+    @Mock
+    private OutboxService outboxService;
 
     private ExperimentService service;
 
     @BeforeEach
     void setUp() {
-        service = new ExperimentService(repository, mapper);
+        service = new ExperimentService(repository, mapper, outboxService);
     }
 
     private static Experiment experimentOwnedBy(Long userId) {
@@ -88,12 +91,28 @@ class ExperimentServiceTest {
     }
 
     @Test
+    void deleteWritesTheExperimentDeletedMessageToTheOutbox() {
+        when(repository.findById(1001L)).thenReturn(Optional.of(experimentOwnedBy(5L)));
+
+        service.delete(1001L, OWNER);
+
+        ArgumentCaptor<Object> message = ArgumentCaptor.forClass(Object.class);
+        verify(outboxService).add(eq("experiment.deleted"), eq("1001"), message.capture());
+        ExperimentDeletedEvent event = (ExperimentDeletedEvent) message.getValue();
+        assertThat(event.experimentId()).isEqualTo(1001L);
+        assertThat(event.deletedBy()).isEqualTo("owner");
+        assertThat(event.eventId()).isNotBlank();
+        assertThat(event.occurredAt()).endsWith("Z");
+    }
+
+    @Test
     void anotherOperatorCannotDelete() {
         when(repository.findById(1001L)).thenReturn(Optional.of(experimentOwnedBy(5L)));
 
         assertStatus(() -> service.delete(1001L, OTHER), HttpStatus.FORBIDDEN);
 
         verify(repository, never()).delete(any(Experiment.class));
+        verifyNoInteractions(outboxService);   // refused delete = NO message
     }
 
     @Test

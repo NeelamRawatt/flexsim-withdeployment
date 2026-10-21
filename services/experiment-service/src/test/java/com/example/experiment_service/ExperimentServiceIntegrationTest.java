@@ -41,7 +41,10 @@ import org.testcontainers.utility.DockerImageName;
  * (@DynamicPropertySource). So this test NEVER touches your real database or your .env secrets.
  * The container is thrown away when the tests finish.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "server.port=0")
+// app.outbox.enabled=false: this test has no Kafka, so the outbox SENDER is switched off.
+// (The outbox ROWS are still written, and the delete test checks them.)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {"server.port=0", "app.outbox.enabled=false"})
 @EnabledIf(value = "dockerIsAvailable", disabledReason = "Docker is not running, so the PostgreSQL container cannot start")
 class ExperimentServiceIntegrationTest {
 
@@ -169,8 +172,9 @@ class ExperimentServiceIntegrationTest {
     // ------------------------------------------------------------ the tests
 
     @Test
-    void flywayRanBothMigrationsAndSeededTheChutes() throws Exception {
-        assertThat(queryLong("select count(*) from flyway_schema_history where success = true")).isEqualTo(2);
+    void flywayRanAllMigrationsAndSeededTheChutes() throws Exception {
+        // V1 tables, V2 chutes, V3 outbox table. Add 1 here every time a new V file is added.
+        assertThat(queryLong("select count(*) from flyway_schema_history where success = true")).isEqualTo(3);
         assertThat(queryLong("select count(*) from chute_master")).isEqualTo(97);
     }
 
@@ -237,6 +241,15 @@ class ExperimentServiceIntegrationTest {
         expect(call("DELETE", "/api/experiments/" + id, OPERATOR_2, null), 403);          // not the owner
         assertThat(call("DELETE", "/api/experiments/" + id, ADMIN, null).status()).isIn(200, 204);   // admin may
         expect(call("GET", "/api/experiments/" + id, OPERATOR_1, null), 404);
+
+        // The delete also wrote ONE "experiment.deleted" message into the outbox (same transaction).
+        // The refused delete (403 above) wrote nothing. sent_at is still empty: no sender job in this test.
+        String outboxRow = "from outbox_event where topic = 'experiment.deleted' and event_key = '" + id + "'";
+        assertThat(queryLong("select count(*) " + outboxRow)).isEqualTo(1);
+        assertThat(queryLong("select count(*) " + outboxRow + " and sent_at is null")).isEqualTo(1);
+        assertThat(queryString("select payload " + outboxRow))
+                .contains("\"experimentId\":" + id)
+                .contains("\"deletedBy\":\"boss\"");
     }
 
     @Test

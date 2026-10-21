@@ -3,7 +3,7 @@
 #
 # Use it together with the main file. From the folder infra\docker run:
 #
-#   docker compose -f docker-compose.yml -f docker-compose.services.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.services.yml -f docker-compose.kafka.yml up -d --build
 #
 #   -f ... -f ...  = read both files as one recipe
 #   up -d          = start everything in the background
@@ -50,6 +50,9 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
+      # Inside Docker, Kafka is reached by its container name on the INTERNAL door (29092).
+      # (On your laptop the default localhost:9092 from application.properties is used.)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     ports:
       - "8082:8082"
     healthcheck:

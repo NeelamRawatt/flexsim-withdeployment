@@ -4,11 +4,15 @@ import com.example.experiment_service.dto.ExperimentDto;
 import com.example.experiment_service.dto.PageResponse;
 import com.example.experiment_service.entity.Experiment;
 import com.example.experiment_service.enums.ExperimentRunStatus;
+import com.example.experiment_service.event.ExperimentDeletedEvent;
+import com.example.experiment_service.event.KafkaTopics;
 import com.example.experiment_service.mapper.ExperimentMapper;
 import com.example.experiment_service.repository.ExperimentRepository;
 import com.example.experiment_service.security.AuthenticatedUser;
+import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -51,10 +55,13 @@ public class ExperimentService {
 
     private final ExperimentRepository experimentRepository;
     private final ExperimentMapper experimentMapper;
+    private final OutboxService outboxService;
 
-    public ExperimentService(ExperimentRepository experimentRepository, ExperimentMapper experimentMapper) {
+    public ExperimentService(ExperimentRepository experimentRepository, ExperimentMapper experimentMapper,
+                             OutboxService outboxService) {
         this.experimentRepository = experimentRepository;
         this.experimentMapper = experimentMapper;
+        this.outboxService = outboxService;
     }
 
     @Transactional
@@ -114,7 +121,9 @@ public class ExperimentService {
 
     /**
      * Deletes ONE experiment row. The database removes the child rows by itself (ON DELETE CASCADE).
-     * Run data and KPIs live in other services; they will be told with a Kafka event in a later step.
+     * Run data, KPIs, files and AI knowledge live in OTHER services. They are told with the Kafka
+     * message "experiment.deleted". The message is written to the outbox table in THIS transaction,
+     * so the delete and the message are saved together, or neither is saved.
      * The owner may delete. ADMIN and DEVELOPER may delete any experiment (same rule as the old app).
      */
     @Transactional
@@ -125,6 +134,14 @@ public class ExperimentService {
             requireOwner(entity, user);
         }
         experimentRepository.delete(entity);
+        outboxService.add(
+                KafkaTopics.EXPERIMENT_DELETED,
+                String.valueOf(experimentId),          // key = experimentId -> keeps order per experiment
+                new ExperimentDeletedEvent(
+                        UUID.randomUUID().toString(),
+                        experimentId,
+                        user.username(),
+                        Instant.now().toString()));
         log.info("Experiment {} deleted by user {} (role {})", experimentId, user.username(), user.role());
     }
 

@@ -1,0 +1,87 @@
+# =====================================================================
+# docker-compose.kafka.yml  (folder: infra\docker)
+# Adds Kafka (the message broker) and creates our 4 topics.
+# Use it TOGETHER with the other compose files (see the commands).
+#
+# LOCAL / DEV setup: 1 broker, no password (PLAINTEXT).
+# On Azure we will use a secured, multi-broker setup instead.
+# =====================================================================
+services:
+
+  # -------------------------------------------------------------------
+  # kafka: the broker = the server that stores the messages.
+  # KRaft mode = Kafka manages itself (no extra "ZooKeeper" server needed).
+  # -------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:3.9.1          # fixed version, so it never changes by surprise
+    container_name: flexsim-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"                    # for programs on your laptop (IntelliJ / VS Code runs)
+    environment:
+      # --- who am I? -------------------------------------------------
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller     # this one server does both jobs
+      CLUSTER_ID: "4L6g3nShT-eMCtK--X86sw"       # fixed id for this local cluster
+
+      # --- the 3 "doors" (listeners) ---------------------------------
+      # INTERNAL  = for other containers, address kafka:29092
+      # EXTERNAL  = for your laptop,      address localhost:9092
+      # CONTROLLER= Kafka's own internal management door (9093)
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      # --- only 1 broker, so every copy count must be 1 ---------------
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      # --- production habit: topics are created ON PURPOSE only -------
+      # A typo like "simulaton.status" will NOT silently create a new topic.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+
+      # --- where messages are saved, and memory limit ------------------
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - kafka-data:/var/lib/kafka/data   # messages survive a container restart
+    healthcheck:
+      # "healthy" = Kafka answers on its port
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # -------------------------------------------------------------------
+  # kafka-init: a ONE-TIME helper. It waits until Kafka is healthy,
+  # creates our 4 topics, prints them, and then stops (exit 0).
+  # --if-not-exists = safe to run again; existing topics are not touched.
+  # -------------------------------------------------------------------
+  kafka-init:
+    image: apache/kafka:3.9.1
+    container_name: flexsim-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        T="/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092"
+        # 4 partitions = up to 4 simulations run at the same time
+        $$T --create --if-not-exists --topic simulation.trigger.requested --partitions 4 --replication-factor 1
+        $$T --create --if-not-exists --topic simulation.status            --partitions 3 --replication-factor 1
+        $$T --create --if-not-exists --topic experiment.deleted           --partitions 3 --replication-factor 1
+        $$T --create --if-not-exists --topic file.validated               --partitions 3 --replication-factor 1
+        echo "Topics now in Kafka:"
+        $$T --list
+
+volumes:
+  kafka-data:
