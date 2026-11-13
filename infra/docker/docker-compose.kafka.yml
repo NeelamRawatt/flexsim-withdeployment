@@ -80,6 +80,9 @@ services:
         $$T --create --if-not-exists --topic simulation.status            --partitions 3 --replication-factor 1
         $$T --create --if-not-exists --topic experiment.deleted           --partitions 3 --replication-factor 1
         $$T --create --if-not-exists --topic file.validated               --partitions 3 --replication-factor 1
+        # DLT = Dead Letter Topic: messages a consumer could not process go here.
+        # SAME number of partitions as the main topic (the failed message keeps its partition number).
+        $$T --create --if-not-exists --topic experiment.deleted.DLT       --partitions 3 --replication-factor 1
         echo "Topics now in Kafka:"
         $$T --list
 

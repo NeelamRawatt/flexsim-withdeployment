@@ -61,3 +61,28 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  file-service:
+    build:
+      context: ../../services/file-service
+    container_name: flexsim-file-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../../services/file-service/.env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # Inside Docker, experiment-service is reached by its service name (not localhost).
+      EXPERIMENT_SERVICE_URL: http://experiment-service:8082
+    ports:
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8086/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s

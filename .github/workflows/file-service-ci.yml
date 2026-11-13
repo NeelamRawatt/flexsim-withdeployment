@@ -1,0 +1,89 @@
+name: file-service CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "services/file-service/**"
+      - ".github/workflows/file-service-ci.yml"
+  pull_request:
+    paths:
+      - "services/file-service/**"
+      - ".github/workflows/file-service-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: file-service-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------- Stage 1: build the code and run all tests ----------
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: services/file-service
+    steps:
+      - name: Download the code
+        uses: actions/checkout@v4
+
+      - name: Install Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Make mvnw ready for Linux
+        run: chmod +x mvnw && sed -i 's/\r$//' mvnw
+
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      - name: Save test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: file-service-test-reports
+          path: services/file-service/target/surefire-reports
+          if-no-files-found: ignore
+
+  # ---------- Stage 2: build the Docker image ----------
+  docker-build:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: services/file-service
+    steps:
+      - name: Download the code
+        uses: actions/checkout@v4
+
+      - name: Build the Docker image
+        run: docker build -t file-service:ci .
+
+      - name: Show the image
+        run: docker image ls file-service
+
+      # ---------- Stage 3: security scan (report only for now) ----------
+      # Scan 1: libraries listed in pom.xml.
+      # --exit-code 0 = print findings, but never make the pipeline red.
+      # --ignore-unfixed = skip holes that have no fix yet.
+      - name: Scan libraries for known security holes
+        run: |
+          docker run --rm -v "$PWD":/project -w /project aquasec/trivy:0.57.1 \
+            fs --scanners vuln --severity HIGH,CRITICAL \
+            --ignore-unfixed --exit-code 0 .
+
+      # Scan 2: the Docker image we just built (Linux + Java + our app).
+      # The docker.sock mount lets Trivy see images on this computer.
+      - name: Scan the Docker image for known security holes
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.57.1 \
+            image --severity HIGH,CRITICAL \
+            --ignore-unfixed --exit-code 0 file-service:ci
