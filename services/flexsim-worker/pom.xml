@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  pom.xml = the "shopping list" of flexsim-worker for Maven (the build tool).
+
+  flexsim-worker is the program that sits NEXT TO FlexSim (on the Azure Windows VM)
+  and runs the simulations. It has NO database of its own.
+
+  W2 = the BASE: web (for the small localhost API in W4 and the health page),
+       calling other services (RestClient), logging in as WORKER, tests.
+  W3 = + Kafka: receive the jobs (and send broken ones to the DLT).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- SAME Spring Boot version as the other services. -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.example</groupId>
+    <artifactId>flexsim-worker</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>flexsim-worker</name>
+    <description>Runs FlexSim simulations and reports their progress</description>
+
+    <properties>
+        <java.version>21</java.version>
+    </properties>
+
+    <dependencies>
+        <!-- ===== WEB: the web server (port 8090, localhost only) + RestClient to call other services ===== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+
+        <!-- ===== KAFKA: receive the jobs (@KafkaListener). No version: the Spring Boot parent chooses it. ===== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+
+        <!-- ===== ACTUATOR: /actuator/health, so we can check that the worker is alive ===== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ===== TESTS: JUnit 5 + Mockito + AssertJ + MockRestServiceServer (a fake other service) ===== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -131,6 +131,9 @@ public class SimulationRunService {
         outboxService.add(KafkaTopics.SIMULATION_TRIGGER_REQUESTED, key, new SimulationTriggerRequestedEvent(
                 UUID.randomUUID().toString(), run.getId(), experimentId, experiment.experimentName(),
                 experiment.startTime(), experiment.endTime(), experiment.maxRecirculationCount(),
+                experiment.useCaseId(), experiment.flexibleResources(), experiment.phoneBoomChute(),
+                experiment.dropChuteFlexible(), experiment.flexibleUnloadResources(), experiment.sorterFullPercent(),
+                experiment.minimumCageOccupancy(), experiment.maximumCageOccupancy(),
                 user.username(), now));
         outboxService.add(KafkaTopics.SIMULATION_STATUS, key, new SimulationStatusEvent(
                 UUID.randomUUID().toString(), run.getId(), experimentId, RunStatus.QUEUED.name(),

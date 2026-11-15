@@ -22,6 +22,9 @@ import java.util.Locale;
  *     (If your old data has plain-text passwords, we hash them ONCE during the data copy.)
  *  2. A missing role now becomes VIEWER (can only look), not ADMIN (can do everything).
  *     This is called "least privilege": give the smallest power by default.
+ *  3. WORKER = the role of the flexsim-worker PROGRAM (a "service account", not a person).
+ *     Nobody can create or change a WORKER through the user-management URLs (they accept only
+ *     ADMIN/OPERATOR/VIEWER). The one WORKER account is made at start-up by WorkerAccountBootstrapConfig.
  */
 @Service
 public class PasswordService {
@@ -42,14 +45,14 @@ public class PasswordService {
         return passwordEncoder.encode(rawPassword);
     }
 
-    /** Allowed roles: ADMIN, DEVELOPER, OPERATOR, VIEWER. Anything else becomes VIEWER. */
+    /** Allowed roles: ADMIN, DEVELOPER, OPERATOR, VIEWER, WORKER. Anything else becomes VIEWER. */
     public String normalizeRole(String role) {
         if (role == null || role.isBlank()) {
             return "VIEWER";
         }
         String normalized = role.trim().toUpperCase(Locale.ROOT);
         return switch (normalized) {
-            case "ADMIN", "DEVELOPER", "OPERATOR", "VIEWER" -> normalized;
+            case "ADMIN", "DEVELOPER", "OPERATOR", "VIEWER", "WORKER" -> normalized;
             default -> "VIEWER";
         };
     }

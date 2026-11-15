@@ -1,6 +1,6 @@
 # =====================================================================
 # docker-compose.kafka.yml  (folder: infra\docker)
-# Adds Kafka (the message broker) and creates our 4 topics.
+# Adds Kafka (the message broker) and creates our topics.
 # Use it TOGETHER with the other compose files (see the commands).
 #
 # LOCAL / DEV setup: 1 broker, no password (PLAINTEXT).
@@ -60,7 +60,7 @@ services:
 
   # -------------------------------------------------------------------
   # kafka-init: a ONE-TIME helper. It waits until Kafka is healthy,
-  # creates our 4 topics, prints them, and then stops (exit 0).
+  # creates our topics, prints them, and then stops (exit 0).
   # --if-not-exists = safe to run again; existing topics are not touched.
   # -------------------------------------------------------------------
   kafka-init:
@@ -83,6 +83,8 @@ services:
         # DLT = Dead Letter Topic: messages a consumer could not process go here.
         # SAME number of partitions as the main topic (the failed message keeps its partition number).
         $$T --create --if-not-exists --topic experiment.deleted.DLT       --partitions 3 --replication-factor 1
+        # W3: jobs the flexsim-worker could not even read (broken message) go here.
+        $$T --create --if-not-exists --topic simulation.trigger.requested.DLT --partitions 4 --replication-factor 1
         echo "Topics now in Kafka:"
         $$T --list
 

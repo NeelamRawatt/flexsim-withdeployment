@@ -43,7 +43,8 @@ class SimulationRunServiceTest {
 
     private static final AuthenticatedUser NEELAM = new AuthenticatedUser(5L, "neelam", "OPERATOR");
     private static final ExperimentSummary EXPERIMENT = new ExperimentSummary(
-            1006L, "neelam", "Pune test", "2026-10-21T23:00:00", "2026-10-22T06:30:00", 3);
+            1006L, "neelam", "Pune test", "2026-10-21T23:00:00", "2026-10-22T06:30:00", 3,
+            2, 1, 1, 0, 0, 90, 65, 75);
 
     @Mock
     private SimulationRunRepository repository;
@@ -110,6 +111,11 @@ class SimulationRunServiceTest {
         assertThat(trigger.runId()).isEqualTo(42L);
         assertThat(trigger.startTime()).isEqualTo("2026-10-21T23:00:00");
         assertThat(trigger.maxRecirculationCount()).isEqualTo(3);
+        // W3: the FlexSim settings travel in the job message too
+        assertThat(trigger.useCaseId()).isEqualTo(2);
+        assertThat(trigger.sorterFullPercent()).isEqualTo(90);
+        assertThat(trigger.minimumCageOccupancy()).isEqualTo(65);
+        assertThat(trigger.maximumCageOccupancy()).isEqualTo(75);
 
         ArgumentCaptor<Object> status = ArgumentCaptor.forClass(Object.class);
         verify(outboxService).add(eq("simulation.status"), eq("1006"), status.capture());

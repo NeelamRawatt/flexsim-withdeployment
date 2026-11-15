@@ -244,7 +244,8 @@ class SimulationServiceIntegrationTest {
     }
 
     private static ExperimentSummary summary(long exp) {
-        return new ExperimentSummary(exp, "op1", "IT experiment", "2026-10-21T23:00:00", "2026-10-21T06:30:00", 3);
+        return new ExperimentSummary(exp, "op1", "IT experiment", "2026-10-21T23:00:00", "2026-10-21T06:30:00", 3,
+                0, 1, 1, 0, 0, 90, 65, 75);
     }
 
     private static String token(long userId, String username, String role) {
