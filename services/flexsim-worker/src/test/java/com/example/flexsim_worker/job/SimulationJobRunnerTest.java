@@ -85,6 +85,23 @@ class SimulationJobRunnerTest {
     }
 
     @Test
+    void workerSaysCanNotGoOnSoFlexsimIsClosedAndFailed() throws Exception {
+        runIs(RunStatus.QUEUED);
+        claimWorks();
+        when(launcher.start(FILES)).thenAnswer(call -> {
+            // for example the parcel data could not be loaded (the localhost API marks the run failed)
+            activeRuns.findByExperiment(EXP).orElseThrow().markFailed("Could not load the parcel data for FlexSim.");
+            return flexsim;
+        });
+
+        runner.run(TestJobs.nightShift(RUN, EXP));
+
+        assertThat(flexsim.destroyed).isTrue();
+        verify(reporter).finish(RUN, RunStatus.FAILED, "Could not load the parcel data for FlexSim.");
+        assertThat(activeRuns.count()).isZero();
+    }
+
+    @Test
     void flexsimClosingBeforeTheEndIsFailed() throws Exception {
         runIs(RunStatus.QUEUED);
         claimWorks();

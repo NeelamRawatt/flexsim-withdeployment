@@ -80,6 +80,8 @@ services:
         $$T --create --if-not-exists --topic simulation.status            --partitions 3 --replication-factor 1
         $$T --create --if-not-exists --topic experiment.deleted           --partitions 3 --replication-factor 1
         $$T --create --if-not-exists --topic file.validated               --partitions 3 --replication-factor 1
+        # W4: KPI snapshots from FlexSim (made by flexsim-worker, read by kpi-service)
+        $$T --create --if-not-exists --topic simulation.kpi               --partitions 3 --replication-factor 1
         # DLT = Dead Letter Topic: messages a consumer could not process go here.
         # SAME number of partitions as the main topic (the failed message keeps its partition number).
         $$T --create --if-not-exists --topic experiment.deleted.DLT       --partitions 3 --replication-factor 1

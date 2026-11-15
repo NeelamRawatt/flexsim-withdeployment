@@ -36,6 +36,24 @@ public class RestClientConfig {
         return build(baseUrl, connectTimeoutMs, readTimeoutMs);
     }
 
+    /** Calls experiment-service: the infeed, zone and sort plan lists FlexSim needs (can be big: 60 s). */
+    @Bean
+    public RestClient experimentDataRestClient(
+            @Value("${app.services.experiment.base-url}") String baseUrl,
+            @Value("${app.services.connect-timeout-ms:2000}") long connectTimeoutMs,
+            @Value("${app.services.data-read-timeout-ms:60000}") long readTimeoutMs) {
+        return build(baseUrl, connectTimeoutMs, readTimeoutMs);
+    }
+
+    /** Calls the owner of the parcel data: the parcels FlexSim simulates (can be big: 60 s). */
+    @Bean
+    public RestClient parcelDataRestClient(
+            @Value("${app.services.parcel.base-url}") String baseUrl,
+            @Value("${app.services.connect-timeout-ms:2000}") long connectTimeoutMs,
+            @Value("${app.services.data-read-timeout-ms:60000}") long readTimeoutMs) {
+        return build(baseUrl, connectTimeoutMs, readTimeoutMs);
+    }
+
     /**
      * The clock the worker uses to know "what time is it now".
      * Tests give a FAKE clock, so they can say "10 minutes later" without waiting 10 minutes.

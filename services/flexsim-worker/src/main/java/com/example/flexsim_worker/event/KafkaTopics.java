@@ -6,6 +6,9 @@ public final class KafkaTopics {
     /** The jobs: "please run this simulation". Made by simulation-service, read by the worker. */
     public static final String SIMULATION_TRIGGER_REQUESTED = "simulation.trigger.requested";
 
+    /** The KPIs FlexSim sends during a run. Made by the worker, read by kpi-service. */
+    public static final String SIMULATION_KPI = "simulation.kpi";
+
     private KafkaTopics() {
     }
 }

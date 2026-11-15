@@ -8,6 +8,7 @@
   W2 = the BASE: web (for the small localhost API in W4 and the health page),
        calling other services (RestClient), logging in as WORKER, tests.
   W3 = + Kafka: receive the jobs (and send broken ones to the DLT).
+  W4 = the localhost API for FlexSim, KPIs to Kafka, safe shutdown, cleanup, Windows service, CI.
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -59,6 +60,8 @@
     </dependencies>
 
     <build>
+        <!-- The jar is always called flexsim-worker.jar (the Windows service file points to this name). -->
+        <finalName>flexsim-worker</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

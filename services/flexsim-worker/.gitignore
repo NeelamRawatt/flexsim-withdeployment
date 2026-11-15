@@ -1,0 +1,9 @@
+# Build output (Maven makes it again)
+target/
+# The run folders FlexSim works in (model copies + logs): local data, never in Git
+flexsim-runs/
+# Secrets
+.env
+# WinSW program and its logs (downloaded on the VM, not part of our code)
+deploy/windows/flexsim-worker.exe
+deploy/windows/*.log

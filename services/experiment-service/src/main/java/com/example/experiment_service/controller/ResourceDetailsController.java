@@ -27,7 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
  *    That belongs to simulation-service now, so here they are plain reads. The "clone/..." URLs
  *    do the same thing; we keep both so no caller breaks.
  *  - The old "getXDetails" URLs were open to everybody (no login) so FlexSim could call them.
- *    Now they need a login. The FlexSim worker gets its own service token in a later step.
+ *    Now they need a login. The FlexSim worker logs in with its own service account (role WORKER).
+ *  - WORKER may only READ the three lists FlexSim needs (getZoneDetails, getInfeedDetails,
+ *    getSortPlanDetails). The rule on a METHOD replaces the class rule for that method.
+ *    WORKER can not save anything here and can not use the other URLs.
  */
 @RestController
 @RequestMapping("/api/resourceDetails")
@@ -49,6 +52,7 @@ public class ResourceDetailsController {
     }
 
     @GetMapping("/getZoneDetails/{exp_id}")
+    @PreAuthorize("hasAnyRole('OPERATOR','ADMIN','DEVELOPER','WORKER')")
     public ResponseEntity<List<FlexsimZoneResourceDetailDto>> getZoneDetails(@PathVariable("exp_id") Long experimentId) {
         return ResponseEntity.ok(service.getZoneDetails(experimentId));
     }
@@ -67,6 +71,7 @@ public class ResourceDetailsController {
     }
 
     @GetMapping("/getInfeedDetails/{exp_id}")
+    @PreAuthorize("hasAnyRole('OPERATOR','ADMIN','DEVELOPER','WORKER')")
     public ResponseEntity<List<FlexsimInfeedResourceDetailDto>> getInfeedDetails(@PathVariable("exp_id") Long experimentId) {
         return ResponseEntity.ok(service.getInfeedDetails(experimentId));
     }
@@ -85,6 +90,7 @@ public class ResourceDetailsController {
     }
 
     @GetMapping("/getSortPlanDetails/{exp_id}")
+    @PreAuthorize("hasAnyRole('OPERATOR','ADMIN','DEVELOPER','WORKER')")
     public ResponseEntity<List<FlexsimSortPlanDetailDto>> getSortPlanDetails(@PathVariable("exp_id") Long experimentId) {
         return ResponseEntity.ok(service.getSortPlanDetails(experimentId));
     }

@@ -36,10 +36,12 @@ import org.springframework.web.client.HttpClientErrorException;
  *     ---- from here on this class NEVER throws: it reports FAILED itself. So a Kafka retry
  *          can never start FlexSim a second time for the same run. ----
  *  4. Prepare the run folder (model copy + script.txt) and START FlexSim (ProcessBuilder).
- *  5. WAIT for the FIRST of these three:
- *       FlexSim says "complete" (W4)  -> COMPLETED, then let FlexSim close (frees the licence)
- *       FlexSim closes by itself       -> FAILED  (it stopped before the end)
- *       the time limit (6 h)           -> close FlexSim -> FAILED
+ *  5. WAIT for the FIRST of these:
+ *       FlexSim says "complete"            -> COMPLETED, then let FlexSim close (frees the licence)
+ *       the worker says "can not go on"    -> close FlexSim -> FAILED
+ *         (data for FlexSim could not be loaded, or the worker is shutting down)
+ *       FlexSim closes by itself           -> FAILED  (it stopped before the end)
+ *       the time limit (6 h)               -> close FlexSim -> FAILED
  *
  * Steps 1 and 3 may throw if simulation-service is down. That is OK: nothing has started yet,
  * so the Kafka error handler simply tries the job again a bit later.
@@ -154,12 +156,13 @@ public class SimulationJobRunner {
             reporter.finish(runId, RunStatus.FAILED, "FlexSim could not be started: " + e.getMessage());
             return;
         }
+        active.attach(process);
         log.info("Run {}: FlexSim started (experiment {}, folder {})", runId, active.experimentId(), files.folder());
         reporter.progress(runId, "PREPARING_IMPORT", "FlexSim started");
 
         // ---- 5. wait for: complete / FlexSim closed / time limit ----
         try {
-            CompletableFuture.anyOf(process.onExit(), active.finished())
+            CompletableFuture.anyOf(process.onExit(), active.outcome())
                     .get(maxRunTime.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             log.warn("Run {}: time limit of {} minutes reached, stopping FlexSim", runId, maxRunTime.toMinutes());
@@ -172,8 +175,7 @@ public class SimulationJobRunner {
             Thread.currentThread().interrupt();
             log.warn("Run {}: worker is stopping, closing FlexSim", runId);
             stop(process);
-            reporter.finish(runId, RunStatus.FAILED,
-                    "The simulation worker was stopped during this run. Please start the simulation again.");
+            reporter.finish(runId, RunStatus.FAILED, ActiveRun.WORKER_STOPPED_MESSAGE);
             return;
         } catch (ExecutionException e) {
             log.error("Run {}: error while waiting for FlexSim", runId, e);
@@ -182,9 +184,16 @@ public class SimulationJobRunner {
             return;
         }
 
-        if (active.finished().isDone()) {
-            reporter.finish(runId, RunStatus.COMPLETED, active.finished().getNow(ActiveRun.DEFAULT_FINISHED_MESSAGE));
-            closeAfterFinish(runId, process);
+        if (active.outcome().isDone()) {
+            ActiveRun.Outcome outcome = active.outcome().join();
+            if (outcome.completed()) {
+                reporter.finish(runId, RunStatus.COMPLETED, outcome.message());
+                closeAfterFinish(runId, process);
+            } else {
+                log.warn("Run {}: stopped by the worker: {}", runId, outcome.message());
+                stop(process);
+                reporter.finish(runId, RunStatus.FAILED, outcome.message());
+            }
         } else {
             int exitCode = exitCode(process);
             log.warn("Run {}: FlexSim closed before the end (exit code {}). See {}", runId, exitCode, files.log());

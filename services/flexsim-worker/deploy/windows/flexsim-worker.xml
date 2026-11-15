@@ -1,0 +1,44 @@
+<!--
+  flexsim-worker.xml = the settings file for WinSW (Windows Service Wrapper).
+
+  WinSW is a small free program that turns ANY program (here: "java -jar flexsim-worker.jar")
+  into a real Windows service:
+    - starts automatically when the VM starts (also after a Windows update restart)
+    - restarts the worker by itself if it crashes
+    - stops it politely (Ctrl+C), so the worker can close FlexSim and report FAILED
+
+  WinSW reads this file because it has the SAME name as the program: flexsim-worker.exe + flexsim-worker.xml.
+  %BASE% = the folder of this file (for example C:\flexsim-worker).
+-->
+<service>
+  <id>flexsim-worker</id>
+  <name>FlexSim Worker</name>
+  <description>Runs FlexSim simulations for the PostNord simulation platform (flexsim-worker).</description>
+
+  <!-- Java 21 (JAVA_HOME is set when Java is installed). -Xmx1g: the worker itself is small; FlexSim has its own memory. -->
+  <executable>%JAVA_HOME%\bin\java.exe</executable>
+  <arguments>-Xms256m -Xmx1g -jar "%BASE%\flexsim-worker.jar"</arguments>
+
+  <!-- The worker reads its .env (secrets) and writes flexsim-runs\ in this folder. -->
+  <workingdirectory>%BASE%</workingdirectory>
+
+  <!-- Start with Windows, a bit after the network is ready. -->
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>true</delayedAutoStart>
+
+  <!-- Crashed? Start again after 10 s, then 30 s, then 60 s. The counter resets after 1 hour without a crash. -->
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <onfailure action="restart" delay="60 sec"/>
+  <resetfailure>1 hour</resetfailure>
+
+  <!-- On "stop": wait up to 90 s for the worker to close FlexSim and report, before killing it. -->
+  <stoptimeout>90 sec</stoptimeout>
+
+  <!-- The worker's console output, in files of max 10 MB, the last 8 files are kept. -->
+  <logpath>%BASE%\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+</service>
