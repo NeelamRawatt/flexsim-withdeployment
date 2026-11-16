@@ -89,6 +89,8 @@ services:
         $$T --create --if-not-exists --topic simulation.trigger.requested.DLT --partitions 4 --replication-factor 1
         # kpi-service: KPI snapshots it could not read or save go here.
         $$T --create --if-not-exists --topic simulation.kpi.DLT           --partitions 3 --replication-factor 1
+        # experiment-service: status messages it could not read or save go here.
+        $$T --create --if-not-exists --topic simulation.status.DLT        --partitions 3 --replication-factor 1
         echo "Topics now in Kafka:"
         $$T --list
 

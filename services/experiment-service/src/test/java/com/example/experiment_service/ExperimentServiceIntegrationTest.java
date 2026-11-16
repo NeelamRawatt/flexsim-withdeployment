@@ -41,10 +41,11 @@ import org.testcontainers.utility.DockerImageName;
  * (@DynamicPropertySource). So this test NEVER touches your real database or your .env secrets.
  * The container is thrown away when the tests finish.
  */
-// app.outbox.enabled=false: this test has no Kafka, so the outbox SENDER is switched off.
+// app.outbox.enabled=false + listener auto-startup=false: this test has no Kafka, so the outbox SENDER
+// and the Kafka LISTENER are switched off.
 // (The outbox ROWS are still written, and the delete test checks them.)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {"server.port=0", "app.outbox.enabled=false"})
+        properties = {"server.port=0", "app.outbox.enabled=false", "spring.kafka.listener.auto-startup=false"})
 @EnabledIf(value = "dockerIsAvailable", disabledReason = "Docker is not running, so the PostgreSQL container cannot start")
 class ExperimentServiceIntegrationTest {
 
