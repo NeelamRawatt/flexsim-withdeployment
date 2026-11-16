@@ -116,3 +116,30 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+
+  # ---------------------------------------------------------------------
+  # kpi-service: saves the KPI snapshots from Kafka (simulation.kpi) and shows them to React.
+  # ---------------------------------------------------------------------
+  kpi-service:
+    build:
+      context: ../../services/kpi-service
+    container_name: flexsim-kpi-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ../../services/kpi-service/.env
+    environment:
+      # Inside Docker, other containers are reached by their SERVICE NAME, not localhost.
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    ports:
+      - "8084:8084"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8084/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s

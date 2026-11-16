@@ -87,6 +87,8 @@ services:
         $$T --create --if-not-exists --topic experiment.deleted.DLT       --partitions 3 --replication-factor 1
         # W3: jobs the flexsim-worker could not even read (broken message) go here.
         $$T --create --if-not-exists --topic simulation.trigger.requested.DLT --partitions 4 --replication-factor 1
+        # kpi-service: KPI snapshots it could not read or save go here.
+        $$T --create --if-not-exists --topic simulation.kpi.DLT           --partitions 3 --replication-factor 1
         echo "Topics now in Kafka:"
         $$T --list
 
