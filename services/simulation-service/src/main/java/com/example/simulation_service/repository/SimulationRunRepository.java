@@ -2,6 +2,7 @@ package com.example.simulation_service.repository;
 
 import com.example.simulation_service.entity.SimulationRun;
 import com.example.simulation_service.enums.RunStatus;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +20,12 @@ public interface SimulationRunRepository extends JpaRepository<SimulationRun, Lo
     List<SimulationRun> findByExperimentIdOrderByQueuedAtDesc(Long experimentId);
 
     Optional<SimulationRun> findFirstByExperimentIdOrderByQueuedAtDesc(Long experimentId);
+
+    /** Stuck-run check: RUNNING runs that started before the given time (oldest first, max 100 per round). */
+    List<SimulationRun> findTop100ByStatusAndStartedAtBeforeOrderByStartedAtAsc(RunStatus status, LocalDateTime before);
+
+    /** Stuck-run check: QUEUED runs that were queued before the given time (oldest first, max 100 per round). */
+    List<SimulationRun> findTop100ByStatusAndQueuedAtBeforeOrderByQueuedAtAsc(RunStatus status, LocalDateTime before);
 
     /** Deletes ALL runs of one experiment with ONE SQL statement. Returns how many rows were deleted. */
     @Modifying
