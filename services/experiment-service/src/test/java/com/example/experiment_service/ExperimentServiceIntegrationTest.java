@@ -111,6 +111,8 @@ class ExperimentServiceIntegrationTest {
     private static final String OPERATOR_2 = token(102, "op2", "OPERATOR");
     private static final String ADMIN = token(103, "boss", "ADMIN");
     private static final String VIEWER = token(104, "viewer", "VIEWER");
+    // The flexsim-worker's service account (it reads the data FlexSim needs).
+    private static final String WORKER = token(106, "flexsim-worker", "WORKER");
 
     private record Reply(int status, String body) {
     }
@@ -151,6 +153,12 @@ class ExperimentServiceIntegrationTest {
         }
     }
 
+    private void execute(String sql) throws Exception {
+        try (Connection c = dataSource.getConnection(); Statement s = c.createStatement()) {
+            s.execute(sql);
+        }
+    }
+
     private static long idOf(Reply reply) {
         Matcher m = Pattern.compile("\"experimentId\":(\\d+)").matcher(reply.body());
         assertThat(m.find()).as("no experimentId in: " + reply.body()).isTrue();
@@ -173,8 +181,8 @@ class ExperimentServiceIntegrationTest {
 
     @Test
     void flywayRanAllMigrationsAndSeededTheChutes() throws Exception {
-        // V1 tables, V2 chutes, V3 outbox table. Add 1 here every time a new V file is added.
-        assertThat(queryLong("select count(*) from flyway_schema_history where success = true")).isEqualTo(3);
+        // V1 tables, V2 chutes, V3 outbox table, V4 parcel_details. Add 1 here every time a new V file is added.
+        assertThat(queryLong("select count(*) from flyway_schema_history where success = true")).isEqualTo(4);
         assertThat(queryLong("select count(*) from chute_master")).isEqualTo(97);
     }
 
@@ -366,5 +374,39 @@ class ExperimentServiceIntegrationTest {
         Reply limited = expect(call("GET", "/api/chute-master/sortname-suggestions?limit=5", OPERATOR_1, null), 200);
         assertThat(count(limited.body(), "\"sortName\"")).isEqualTo(5);
         expect(call("GET", "/api/chute-master/sortname-suggestions?query=201", null, null), 401);
+    }
+
+    @Test
+    void parcelsOfTheNightShiftGoToTheWorkerWithFlexsimTime() throws Exception {
+        long id = createExperiment(OPERATOR_1);   // 2026-10-19, 23:00 -> 06:30 (night shift)
+        execute("""
+                insert into parcel_details (parcel_id, parcel_time_slot, parcel_edt_date, parcel_infeed_name, sort_name, parcel_weight)
+                values ('IT-P1',    '2026-10-19 23:10:00', '2026-10-19', 'IF-02', '10661',       145.0),
+                       ('IT-P2',    '2026-10-20 01:00:00', '2026-10-19', 'IF-04', '10440|10440',  90.0),
+                       ('IT-LATE',  '2026-10-20 07:00:00', '2026-10-19', 'IF-04', '10440',        90.0),
+                       ('IT-OTHER', '2026-10-19 23:30:00', '2026-10-18', 'IF-02', '10661',        10.0)
+                """);
+        try {
+            Reply parcels = expect(call("GET", "/api/parcels/getParcels/" + id, WORKER, null), 200);
+            assertThat(parcels.body()).contains("\"parcelId\":\"IT-P1\"", "\"parcelId\":\"IT-P2\"")
+                    .doesNotContain("IT-LATE")      // after the end of the shift
+                    .doesNotContain("IT-OTHER")     // another operational day
+                    .contains("\"flexsimTimeSlot\":780");   // 10 minutes after 23:00 = 600 s + 180 s warm-up
+            assertThat(parcels.body().indexOf("IT-P1")).isLessThan(parcels.body().indexOf("IT-P2"));
+
+            expect(call("GET", "/api/parcels/getParcels/" + id, VIEWER, null), 403);
+            expect(call("GET", "/api/parcels/getParcels/999999999", WORKER, null), 404);
+
+            // The screen's numbers (by time only, like the old app): IT-P1, IT-P2 and IT-OTHER are inside.
+            String window = "{\"startTime\":\"2026-10-19T23:00:00\",\"endTime\":\"2026-10-20T06:30:00\"}";
+            assertThat(expect(call("POST", "/api/parcels/getParcelCount", OPERATOR_1, window), 200).body())
+                    .contains("\"parcelCount\":3");
+            assertThat(expect(call("POST", "/api/parcels/getSortPlan", OPERATOR_1, window), 200).body())
+                    .contains("\"totalParcelCount\":3", "\"10661\":2", "\"10440\":1");
+            expect(call("POST", "/api/parcels/getParcelCount", WORKER, window), 403);   // the worker only reads FlexSim data
+            expect(call("POST", "/api/parcels/getParcelCount", OPERATOR_1, "{\"startTime\":\"2026-10-19T23:00:00\"}"), 400);
+        } finally {
+            execute("delete from parcel_details where parcel_id like 'IT-%'");
+        }
     }
 }
