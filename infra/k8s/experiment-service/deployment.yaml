@@ -1,0 +1,71 @@
+# =====================================================================
+# deployment.yaml  (folder: infra\k8s\experiment-service)
+# The "supervisor" for experiment-service (experiments, resource lists, templates, parcels).
+# Same pattern as auth-service; only the name, image and port differ.
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: experiment-service
+  namespace: flexsim
+  labels:
+    app: experiment-service
+spec:
+  # ONE pod on the laptop (to save memory). In production: at least 2 (see auth-service).
+  replicas: 1
+  selector:
+    matchLabels:
+      app: experiment-service
+  template:
+    metadata:
+      labels:
+        app: experiment-service               # MUST match the selector above and the Service's selector
+    spec:
+      containers:
+        - name: experiment-service
+          # Built with:  docker build -t experiment-service:0.1.0 .   (in services\experiment-service)
+          image: experiment-service:0.1.2
+          # IfNotPresent = use the image already on this machine (laptop); download only if missing.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082   # server.port of experiment-service
+
+          # Settings + passwords become environment variables.
+          # ORDER MATTERS: the LAST source wins. The Secret (made from .env) says POSTGRES_HOST=localhost
+          # (right for mvn on the laptop, wrong inside a pod), so the ConfigMap comes SECOND and wins.
+          envFrom:
+            - secretRef:
+                name: experiment-service-secret
+            - configMapRef:
+                name: experiment-service-config
+
+          # requests = reserved for this pod; limits = the maximum (above the memory limit: OOMKilled).
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              memory: "768Mi"
+
+          # Health checks (management.endpoint.health.probes.enabled=true in application.properties).
+          startupProbe:                    # Spring Boot may take up to 24 x 5 s = 2 minutes to start
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8082
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:                   # stuck? -> restart
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8082
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:                  # not ready? -> no calls are sent to this pod
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8082
+            periodSeconds: 5
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
