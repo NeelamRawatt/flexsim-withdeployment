@@ -1,0 +1,23 @@
+# =====================================================================
+# configmap.yaml  (folder: infra\k8s\simulation-service)
+# simulation-service's NORMAL settings (no passwords). Each line becomes an environment variable;
+# application.properties reads it with ${NAME}. LAPTOP values: on Azure only these values change.
+# =====================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: simulation-service-config
+  namespace: flexsim
+data:
+  # The database runs OUTSIDE Kubernetes (Docker Compose on the laptop, Azure PostgreSQL later).
+  # host.docker.internal = "my laptop", seen from inside a pod. 5433 = the port Compose opens.
+  POSTGRES_HOST: "host.docker.internal"
+  POSTGRES_PORT: "5433"
+  # Kafka also runs in Docker Compose. 9094 = the extra Kafka "door" made for Kubernetes pods
+  # (see docker-compose.kafka.yml). On Azure this becomes the Event Hubs address.
+  KAFKA_BOOTSTRAP_SERVERS: "host.docker.internal:9094"
+  # Other services: reached by their Kubernetes SERVICE NAME (Kubernetes DNS), not localhost.
+  EXPERIMENT_SERVICE_URL: "http://experiment-service:8082"
+  FILE_SERVICE_URL: "http://file-service:8086"
+  # The React website that may call this service from a browser.
+  APP_ALLOWED_ORIGINS: "http://localhost:3000"

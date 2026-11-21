@@ -1,0 +1,30 @@
+{{- /*
+=====================================================================
+configmap.yaml   (folder: infra\helm\flexsim-service\templates)
+The NON-secret settings of one service. They come from "config:" in the
+service's values file and become environment variables in the container
+(through envFrom in deployment.yaml).
+
+Name: <name>-config  (e.g. auth-service-config), the same as your old YAML.
+=====================================================================
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "flexsim-service.name" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flexsim-service.labels" . | nindent 4 }}
+data:
+  {{- /*
+  range = a LOOP, like Java's  for (var e : config.entrySet()) { ... }
+    $key   = the setting name   (e.g. POSTGRES_PORT)
+    $value = the setting value  (e.g. 5433)
+  quote = put "..." around the value. A ConfigMap only accepts TEXT.
+          Without quotes, 5433 or false would be a number/boolean, and
+          Kubernetes would reject the ConfigMap.
+  If config is empty, the loop writes nothing and data stays empty.
+  */}}
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

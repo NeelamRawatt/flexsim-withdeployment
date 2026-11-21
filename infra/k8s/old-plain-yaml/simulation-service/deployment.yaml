@@ -1,0 +1,71 @@
+# =====================================================================
+# deployment.yaml  (folder: infra\k8s\simulation-service)
+# The "supervisor" for simulation-service (simulation runs, status, live progress (SSE)).
+# Same pattern as auth-service; only the name, image and port differ.
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simulation-service
+  namespace: flexsim
+  labels:
+    app: simulation-service
+spec:
+  # ONE pod on the laptop (to save memory). In production: at least 2 (see auth-service).
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simulation-service
+  template:
+    metadata:
+      labels:
+        app: simulation-service               # MUST match the selector above and the Service's selector
+    spec:
+      containers:
+        - name: simulation-service
+          # Built with:  docker build -t simulation-service:0.1.0 .   (in services\simulation-service)
+          image: simulation-service:0.1.0
+          # IfNotPresent = use the image already on this machine (laptop); download only if missing.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8083   # server.port of simulation-service
+
+          # Settings + passwords become environment variables.
+          # ORDER MATTERS: the LAST source wins. The Secret (made from .env) says POSTGRES_HOST=localhost
+          # (right for mvn on the laptop, wrong inside a pod), so the ConfigMap comes SECOND and wins.
+          envFrom:
+            - secretRef:
+                name: simulation-service-secret
+            - configMapRef:
+                name: simulation-service-config
+
+          # requests = reserved for this pod; limits = the maximum (above the memory limit: OOMKilled).
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              memory: "768Mi"
+
+          # Health checks (management.endpoint.health.probes.enabled=true in application.properties).
+          startupProbe:                    # Spring Boot may take up to 24 x 5 s = 2 minutes to start
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:                   # stuck? -> restart
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:                  # not ready? -> no calls are sent to this pod
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8083
+            periodSeconds: 5
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false

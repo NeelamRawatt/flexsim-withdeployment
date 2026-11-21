@@ -1,0 +1,12 @@
+# =====================================================================
+# hello-config.yaml  -  a ConfigMap = normal (NOT secret) settings for pods.
+# =====================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-config
+  namespace: flexsim
+data:
+  # Each line becomes an environment variable in the pod (name: value).
+  APP_GREETING: "Hello from the ConfigMap"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"

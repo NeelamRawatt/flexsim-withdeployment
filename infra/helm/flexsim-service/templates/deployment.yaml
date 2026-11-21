@@ -1,0 +1,84 @@
+{{- /*
+=====================================================================
+deployment.yaml   (folder: infra\helm\flexsim-service\templates)
+The SAME Deployment you wrote by hand, but with blanks {{ }}.
+Helm fills the blanks from values.yaml + the service's values file.
+
+Where values come from:
+  .Values.xxx   = from values.yaml / values\local\<service>.yaml
+  .Release.xxx  = from the helm command (release name, namespace)
+  .Chart.xxx    = from Chart.yaml
+=====================================================================
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flexsim-service.name" . }}
+  # The namespace comes from the command: helm ... --namespace flexsim
+  # (not written here, so the same chart works in any namespace)
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- /* nindent 4 = start on a new line and push every line 4 spaces right,
+           so the labels sit correctly under "labels:" */}}
+    {{- include "flexsim-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "flexsim-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "flexsim-service.labels" . | nindent 8 }}
+      annotations:
+        # CHECKSUM: a fingerprint of the ConfigMap's content.
+        # Problem it solves: pods read the ConfigMap only when they START.
+        # If you change a setting and run helm upgrade, the ConfigMap changes
+        # but the pods would keep the OLD settings.
+        # With this line: settings change -> fingerprint changes -> the pod
+        # template changes -> Kubernetes does a rolling update automatically.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      containers:
+        - name: {{ include "flexsim-service.name" . }}
+          image: {{ include "flexsim-service.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            # "name: http" gives the port a name; the probes and the Service use the name.
+            - name: http
+              containerPort: {{ include "flexsim-service.port" . }}
+
+          # ORDER MATTERS: the LAST one wins.
+          # Secret first (from your .env), ConfigMap second, so the ConfigMap's
+          # POSTGRES_HOST=host.docker.internal wins over the .env's localhost.
+          envFrom:
+            - secretRef:
+                name: {{ include "flexsim-service.secretName" . }}
+            - configMapRef:
+                name: {{ include "flexsim-service.name" . }}-config
+
+          # toYaml = write this part of the values as YAML, exactly as it is.
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.startup.path }}
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}

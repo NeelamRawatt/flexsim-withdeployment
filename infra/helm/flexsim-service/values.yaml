@@ -1,0 +1,122 @@
+# =====================================================================
+# values.yaml   (folder: infra\helm\flexsim-service)
+# The DEFAULT answers for every blank {{ .Values.xxx }} in the templates.
+#
+# How values are mixed:
+#   this file (defaults)
+#     + values\local\auth-service.yaml (only what is DIFFERENT for auth)
+#     = final values
+# The file given LATER wins. So a service file only needs the lines that differ.
+#
+# Lines marked REQUIRED have no useful default: every service file MUST set them.
+# =====================================================================
+
+# ---------------------------------------------------------------------
+# name: the service name. Used for the Deployment, the Service, the labels
+# and the container. Other pods find this service by this name (cluster DNS):
+#   http://auth-service:8081
+# REQUIRED. Example: auth-service
+# ---------------------------------------------------------------------
+name: ""
+
+# ---------------------------------------------------------------------
+# port: the port Spring Boot listens on (server.port).
+# Used for the container port, the Service port AND the health checks.
+# REQUIRED. Example: 8081
+# ---------------------------------------------------------------------
+port: 0
+
+# How many copies (pods) to run. 1 on the laptop; more in production.
+replicaCount: 1
+
+# ---------------------------------------------------------------------
+# image: which Docker image to run.
+#   repository = the image name WITHOUT the tag.
+#                Laptop: auth-service
+#                Azure : <our-registry>.azurecr.io/auth-service   (later)
+#                Left empty -> the template uses "name" (auth-service).
+#   tag        = the version. REQUIRED. Never "latest" in production:
+#                "latest" changes silently, so you never know what is running.
+#   pullPolicy = IfNotPresent: use the image already on the machine,
+#                download only if it is missing.
+# ---------------------------------------------------------------------
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# ---------------------------------------------------------------------
+# service: how other pods reach this app.
+# ClusterIP = reachable only INSIDE the cluster (safe default).
+# Outside traffic will come through the Gateway later (step D3), not directly.
+# ---------------------------------------------------------------------
+service:
+  type: ClusterIP
+
+# ---------------------------------------------------------------------
+# config: the NON-secret settings. They become the ConfigMap
+# and then environment variables in the container.
+# Each service file fills this with its own settings (POSTGRES_HOST, ...).
+# NEVER put passwords here: values files go into Git.
+# {} = empty list by default.
+# ---------------------------------------------------------------------
+config: {}
+
+# ---------------------------------------------------------------------
+# secretName: the name of the Secret that holds the passwords.
+# The chart does NOT create it. You create it yourself with:
+#   kubectl create secret generic auth-service-secret --from-env-file=...
+# (Later in Azure, Key Vault fills it.)
+# Left empty -> the template uses "<name>-secret", e.g. auth-service-secret.
+# ---------------------------------------------------------------------
+secretName: ""
+
+# ---------------------------------------------------------------------
+# resources: CPU and memory.
+#   requests = what Kubernetes RESERVES (used to pick a node with room)
+#   limits   = the MAXIMUM. Over the memory limit -> the pod is killed (OOMKilled).
+# 250m = a quarter of one CPU core. Mi = mebibytes (about megabytes).
+# No CPU limit on purpose: a CPU limit slows Java down (it is "throttled"),
+# especially at startup. Memory limit is kept: memory cannot be "slowed", only killed.
+# ---------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 768Mi
+
+# ---------------------------------------------------------------------
+# probes: health checks (Spring Boot Actuator pages).
+#   startup   = "has it finished starting?"  Up to 60 x 5 s = 5 minutes.
+#               (Was 24 = 2 minutes. Too short when several Java apps start at
+#               the SAME time on a small machine: they share the CPU and start slowly.
+#               A long startup limit is safe: it is only used ONCE, at start.
+#               After start, liveness takes over with its short 30 s limit.)
+#               While this runs, the other two probes wait.
+#   liveness  = "is it stuck?"   NO -> restart the container.
+#               Does NOT check the database on purpose (a DB problem
+#               should not restart every pod).
+#   readiness = "can it take calls now?"  NO -> no calls are sent to it.
+# ---------------------------------------------------------------------
+probes:
+  startup:
+    path: /actuator/health/liveness
+    periodSeconds: 5
+    failureThreshold: 60
+  liveness:
+    path: /actuator/health/liveness
+    periodSeconds: 10
+    failureThreshold: 3
+  readiness:
+    path: /actuator/health/readiness
+    periodSeconds: 5
+    failureThreshold: 3
+
+# ---------------------------------------------------------------------
+# securityContext: safety rules for the container.
+# allowPrivilegeEscalation: false = the program can never gain extra powers.
+# (Our Dockerfiles already run the app as the normal user "app", not root.)
+# ---------------------------------------------------------------------
+securityContext:
+  allowPrivilegeEscalation: false

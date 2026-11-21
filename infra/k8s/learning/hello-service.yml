@@ -1,0 +1,17 @@
+# =====================================================================
+# hello-service.yaml  -  a Service = ONE fixed name and address for a group of pods.
+# =====================================================================
+apiVersion: v1              # Services belong to Kubernetes' core group, version v1
+kind: Service               # WHAT we create: a Service ("the main phone number")
+metadata:
+  name: hello-nginx         # the fixed NAME. Inside the cluster, other programs call http://hello-nginx
+  namespace: flexsim
+spec:
+  # ClusterIP = reachable ONLY from inside the cluster (safe default; not from the internet).
+  type: ClusterIP
+  # Which pods get the calls: every pod with this name tag (the same tag as in the Deployment).
+  selector:
+    app: hello-nginx
+  ports:
+    - port: 80              # the port callers use:  http://hello-nginx:80
+      targetPort: 80        # the port inside the pods where NGINX listens

@@ -1,0 +1,17 @@
+# =====================================================================
+# service.yaml  (folder: infra\k8s\experiment-service)
+# ONE fixed name and address for all experiment-service pods: http://experiment-service:8082
+# ClusterIP = reachable only INSIDE the cluster.
+# =====================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: experiment-service
+  namespace: flexsim
+spec:
+  type: ClusterIP
+  selector:
+    app: experiment-service
+  ports:
+    - port: 8082
+      targetPort: 8082

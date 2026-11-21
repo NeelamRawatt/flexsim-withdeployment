@@ -1,0 +1,31 @@
+# =====================================================================
+# Chart.yaml   (folder: infra\helm\flexsim-service)
+# The chart's "ID card". Helm reads this first to know WHAT this chart is.
+# One chart = one folder. This one chart is used for ALL our Spring Boot services.
+# =====================================================================
+
+# apiVersion: v2 = the chart format for Helm 3 and Helm 4. (v1 was the very old Helm 2 format.)
+apiVersion: v2
+
+# name = the chart's name. It MUST be the same as the folder name: flexsim-service.
+name: flexsim-service
+
+# A short sentence that tells people what the chart is for.
+description: Generic chart for the FlexSim Spring Boot microservices (Deployment + Service + ConfigMap)
+
+# type: application = this chart installs something that runs.
+# (The other type, "library", only holds helper pieces for other charts and installs nothing.)
+type: application
+
+# version = the version of the CHART ITSELF (the templates).
+# Raise it every time you change a file in templates\ or the defaults in values.yaml.
+# Format MAJOR.MINOR.PATCH ("semantic versioning"):
+#   PATCH 0.1.0 -> 0.1.1  small fix, nothing breaks
+#   MINOR 0.1.1 -> 0.2.0  new option added, old values still work
+#   MAJOR 0.2.0 -> 1.0.0  old values files must be changed
+version: 0.1.1
+
+# appVersion = the version of the APP inside. Only a label, shown in "helm list".
+# Our 5 services each have their OWN image tag (set in each values file),
+# so this is just a general label here.
+appVersion: "0.1.0"

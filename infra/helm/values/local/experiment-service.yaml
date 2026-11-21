@@ -1,0 +1,28 @@
+# =====================================================================
+# experiment-service.yaml   (folder: infra\helm\values\local)
+# The "guest list" for experiment-service on the LAPTOP (Docker Desktop Kubernetes).
+# Only what is DIFFERENT from the chart's defaults (infra\helm\flexsim-service\values.yaml).
+# Everything else (probes, memory, security) comes from the defaults.
+#
+# Used like this (from the project root):
+#   helm upgrade --install experiment-service infra\helm\flexsim-service -n flexsim -f infra\helm\values\local\experiment-service.yaml
+#
+# NO PASSWORDS HERE: this file goes into Git. Passwords stay in the Secret
+# "experiment-service-secret" (made with kubectl create secret ... --from-env-file).
+# =====================================================================
+
+name: experiment-service
+port: 8082
+
+image:
+  # 0.1.2 = the version with Actuator (the health-check fix).
+  tag: "0.1.2"
+
+config:
+  # The laptop, as seen from inside a pod (Postgres runs in Docker Compose).
+  POSTGRES_HOST: host.docker.internal
+  POSTGRES_PORT: 5433
+  # Kafka in Docker Compose; 9094 is the special listener we made for pods.
+  KAFKA_BOOTSTRAP_SERVERS: host.docker.internal:9094
+  # Which website may call this API from a browser (CORS). The React app on the laptop.
+  APP_ALLOWED_ORIGINS: http://localhost:3000

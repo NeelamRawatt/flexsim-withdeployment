@@ -1,0 +1,17 @@
+# =====================================================================
+# service.yaml  (folder: infra\k8s\file-service)
+# ONE fixed name and address for all file-service pods: http://file-service:8086
+# ClusterIP = reachable only INSIDE the cluster.
+# =====================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: file-service
+  namespace: flexsim
+spec:
+  type: ClusterIP
+  selector:
+    app: file-service
+  ports:
+    - port: 8086
+      targetPort: 8086

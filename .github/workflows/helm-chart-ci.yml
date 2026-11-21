@@ -1,0 +1,65 @@
+# =====================================================================
+# helm-chart-ci.yml   (folder: .github\workflows)
+# CI for the Helm chart: on every push/PR that touches infra/helm,
+# GitHub checks the chart for mistakes BEFORE anyone installs it.
+#
+# What it does, for EACH of the 5 services:
+#   helm lint      = spell-check the chart with that service's values
+#   helm template  = fill the blanks and make the final YAML
+#                    (fails if a required value is missing or the YAML is broken)
+# Nothing is installed anywhere. It only CHECKS.
+# =====================================================================
+name: helm-chart CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "infra/helm/**"
+      - ".github/workflows/helm-chart-ci.yml"
+  pull_request:
+    paths:
+      - "infra/helm/**"
+      - ".github/workflows/helm-chart-ci.yml"
+
+# Least rights: this job only needs to READ the code.
+permissions:
+  contents: read
+
+# A newer push cancels the older run on the same branch (saves time).
+concurrency:
+  group: helm-chart-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # "matrix" = run the SAME steps once per service, in parallel.
+    # Like a for-loop over the 5 service names.
+    strategy:
+      fail-fast: false          # if one service fails, still check the others
+      matrix:
+        service: [auth-service, experiment-service, file-service, simulation-service, kpi-service]
+
+    steps:
+      - name: Download the code
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: helm lint (${{ matrix.service }})
+        run: |
+          helm lint infra/helm/flexsim-service \
+            -f infra/helm/values/local/${{ matrix.service }}.yaml
+
+      - name: helm template (${{ matrix.service }})
+        run: |
+          helm template ${{ matrix.service }} infra/helm/flexsim-service \
+            -n flexsim \
+            -f infra/helm/values/local/${{ matrix.service }}.yaml \
+            > rendered.yaml
+          echo "Rendered $(grep -c '^kind:' rendered.yaml) Kubernetes objects:"
+          grep '^kind:' rendered.yaml

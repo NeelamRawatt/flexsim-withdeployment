@@ -1,0 +1,25 @@
+# =====================================================================
+# .helmignore   (folder: infra\helm\flexsim-service)
+# Files Helm must SKIP when it packs the chart. Same idea as .gitignore.
+# One pattern per line. * = "anything".
+# =====================================================================
+
+# Version-control folders
+.git/
+.gitignore
+
+# Editor / IDE files
+.vscode/
+.idea/
+*.swp
+*.bak
+*.tmp
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Safety: never pack secret files into the chart
+.env
+*.env

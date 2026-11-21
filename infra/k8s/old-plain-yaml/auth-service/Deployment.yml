@@ -1,0 +1,85 @@
+# =====================================================================
+# deployment.yaml  (folder: infra\k8s\auth-service)
+# The "supervisor" for auth-service: keeps the wanted number of pods running.
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: flexsim
+  labels:
+    app: auth-service
+spec:
+  # Start with ONE pod. (Both pods would try to create the first developer/worker user at the
+  # same moment at their very first start. We scale to 2 AFTER the first start: a later step.)
+  replicas: 2
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service           # MUST match the selector above (and the Service's selector)
+    spec:
+      containers:
+        - name: auth-service
+          # The image we built with: docker build -t auth-service:0.1.0 .
+          image: auth-service:0.1.0
+          # IfNotPresent = use the image already on this machine; download only if it is missing.
+          # (On the laptop the image is local. On Azure it will be pulled from ACR.)
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081   # server.port of auth-service
+
+          # Settings + passwords become environment variables.
+          # ORDER MATTERS: if the same name is in both, the LAST one wins.
+          # The Secret is made from your .env, which says POSTGRES_HOST=localhost (right for running
+          # with mvn on the laptop, wrong inside a pod). The ConfigMap comes SECOND, so its
+          # POSTGRES_HOST=host.docker.internal wins.
+          envFrom:
+            - secretRef:
+                name: auth-service-secret
+            - configMapRef:
+                name: auth-service-config
+
+          # RESOURCES = how much CPU and memory this container needs and may use.
+          #   requests = what Kubernetes RESERVES for it (used to choose a node with enough room)
+          #   limits   = the MAXIMUM. Above the memory limit the container is killed ("OOMKilled").
+          # cpu "250m" = 250 millicores = a quarter of one CPU core.
+          # Our Dockerfile says MaxRAMPercentage=75: Java uses at most 75% of 768Mi for its heap.
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              memory: "768Mi"
+
+          # HEALTH CHECKS (probes). auth-service has these pages because of
+          # management.endpoint.health.probes.enabled=true in application.properties.
+          # Startup: Spring Boot needs time to start. Up to 24 x 5 s = 2 minutes before we give up.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            periodSeconds: 5
+            failureThreshold: 24
+          # Liveness: stuck? -> restart. (Does NOT check the database on purpose.)
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            periodSeconds: 10
+            failureThreshold: 3
+          # Readiness: ready for calls? NO -> no calls are sent to this pod.
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            periodSeconds: 5
+            failureThreshold: 3
+
+          # SAFETY: the program may not gain extra powers inside the container.
+          # (It already runs as the normal user "app", see USER app in the Dockerfile.
+          #  A later production step adds runAsNonRoot, which needs a NUMBER user id in the Dockerfile.)
+          securityContext:
+            allowPrivilegeEscalation: false

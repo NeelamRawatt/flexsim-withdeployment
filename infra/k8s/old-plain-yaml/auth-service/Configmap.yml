@@ -1,0 +1,21 @@
+# =====================================================================
+# configmap.yaml  (folder: infra\k8s\auth-service)
+# auth-service's NORMAL settings (no passwords). Every line below becomes an
+# environment variable in the pod; application.properties reads it with ${NAME}.
+#
+# LAPTOP values. On Azure only these values change (database address, website address ...).
+# =====================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: flexsim
+data:
+  # The database runs OUTSIDE Kubernetes (Docker Compose on the laptop, Azure PostgreSQL later).
+  # host.docker.internal = "my laptop", as seen from inside a pod. 5433 = the port Compose opens.
+  POSTGRES_HOST: "host.docker.internal"
+  POSTGRES_PORT: "5433"
+  # The React website that may call this service from a browser.
+  APP_ALLOWED_ORIGINS: "http://localhost:3000"
+  # false on the laptop (no HTTPS here). true on Azure (cookies only over HTTPS).
+  APP_COOKIE_SECURE: "false"

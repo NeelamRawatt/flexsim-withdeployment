@@ -1,0 +1,71 @@
+# =====================================================================
+# deployment.yaml  (folder: infra\k8s\kpi-service)
+# The "supervisor" for kpi-service (KPI snapshots from FlexSim, KPI history, live KPIs (SSE)).
+# Same pattern as auth-service; only the name, image and port differ.
+# =====================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kpi-service
+  namespace: flexsim
+  labels:
+    app: kpi-service
+spec:
+  # ONE pod on the laptop (to save memory). In production: at least 2 (see auth-service).
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kpi-service
+  template:
+    metadata:
+      labels:
+        app: kpi-service               # MUST match the selector above and the Service's selector
+    spec:
+      containers:
+        - name: kpi-service
+          # Built with:  docker build -t kpi-service:0.1.0 .   (in services\kpi-service)
+          image: kpi-service:0.1.0
+          # IfNotPresent = use the image already on this machine (laptop); download only if missing.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8084   # server.port of kpi-service
+
+          # Settings + passwords become environment variables.
+          # ORDER MATTERS: the LAST source wins. The Secret (made from .env) says POSTGRES_HOST=localhost
+          # (right for mvn on the laptop, wrong inside a pod), so the ConfigMap comes SECOND and wins.
+          envFrom:
+            - secretRef:
+                name: kpi-service-secret
+            - configMapRef:
+                name: kpi-service-config
+
+          # requests = reserved for this pod; limits = the maximum (above the memory limit: OOMKilled).
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              memory: "768Mi"
+
+          # Health checks (management.endpoint.health.probes.enabled=true in application.properties).
+          startupProbe:                    # Spring Boot may take up to 24 x 5 s = 2 minutes to start
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8084
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:                   # stuck? -> restart
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8084
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:                  # not ready? -> no calls are sent to this pod
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8084
+            periodSeconds: 5
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false

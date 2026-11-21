@@ -1,0 +1,64 @@
+# =====================================================================
+# hello-deployment.yaml  -  our FIRST Kubernetes file (learning only).
+# A Deployment = a "supervisor" that always keeps a fixed number of pods running.
+# =====================================================================
+
+# Which version of Kubernetes' rules this file uses.
+# Deployments belong to the group "apps", version "v1".
+apiVersion: apps/v1
+
+# WHAT we create: a Deployment (the supervisor).
+kind: Deployment
+
+# The Deployment's own details.
+metadata:
+  # Its name (we use it in commands, e.g. kubectl get deployment hello-nginx).
+  name: hello-nginx
+  # The namespace (our "department") it belongs to.
+  namespace: flexsim
+  # Name tags on the Deployment itself (useful for searching later).
+  labels:
+    app: hello-nginx
+
+# WHAT WE WANT (the rule card).
+spec:
+  # How many copies (pods) must ALWAYS run. This is the self-healing number.
+  replicas: 2
+
+  # How the Deployment finds ITS pods: every pod with the tag app=hello-nginx.
+  selector:
+    matchLabels:
+      app: hello-nginx
+
+  # The TEMPLATE = the "recipe" for each new pod the Deployment creates.
+  template:
+    metadata:
+      # Every new pod gets this tag. It MUST match the selector above,
+      # otherwise the supervisor would not recognise its own pods.
+      labels:
+        app: hello-nginx
+    spec:
+      # The containers inside each pod (a list: "-" = one item).
+      containers:
+        - name: nginx                # the container's name inside the pod
+          image: nginx:1.27          # the image, with a FIXED version
+          ports:
+            - containerPort: 80      # NGINX listens on port 80 inside the container
+          envFrom:
+            - configMapRef:
+                name: hello-config      # the notice board
+            - secretRef:
+                name: hello-secret      # the locked drawer
+                    # Is the program ready for calls? NO -> no calls are sent to this pod.
+          readinessProbe:
+            httpGet:                 # check by calling a web address inside the pod
+              path: /                # NGINX's main page
+              port: 80
+            periodSeconds: 5         # ask every 5 seconds
+          # Is the program alive? NO (3 times in a row) -> restart the container.
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 10        # ask every 10 seconds
+            failureThreshold: 3      # restart only after 3 failures in a row (not one hiccup)

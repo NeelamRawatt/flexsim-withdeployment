@@ -1,0 +1,30 @@
+# =====================================================================
+# auth-service.yaml   (folder: infra\helm\values\local)
+# The "guest list" for auth-service on the LAPTOP (Docker Desktop Kubernetes).
+# Only what is DIFFERENT from the chart's defaults (infra\helm\flexsim-service\values.yaml).
+# Everything else (probes, memory, security) comes from the defaults.
+#
+# Used like this (from the project root):
+#   helm upgrade --install auth-service infra\helm\flexsim-service -n flexsim -f infra\helm\values\local\auth-service.yaml
+#
+# NO PASSWORDS HERE: this file goes into Git. Passwords stay in the Secret
+# "auth-service-secret" (made with kubectl create secret ... --from-env-file).
+# =====================================================================
+
+name: auth-service
+port: 8081
+
+# 2 copies: login must keep working while one pod restarts or updates.
+replicaCount: 2
+
+image:
+  tag: "0.1.0"
+
+config:
+  # The laptop, as seen from inside a pod (Postgres runs in Docker Compose).
+  POSTGRES_HOST: host.docker.internal
+  POSTGRES_PORT: 5433
+  # Which website may call this API from a browser (CORS). The React app on the laptop.
+  APP_ALLOWED_ORIGINS: http://localhost:3000
+  # false on the laptop (plain http). MUST be true in Azure (https only).
+  APP_COOKIE_SECURE: false

@@ -1,0 +1,31 @@
+{{- /*
+=====================================================================
+service.yaml   (folder: infra\helm\flexsim-service\templates)
+The Service = a fixed name + port in front of the pods.
+Other pods call  http://<name>:<port>  (e.g. http://auth-service:8081)
+and the Service sends the call to one READY pod with the matching label.
+=====================================================================
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexsim-service.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flexsim-service.labels" . | nindent 4 }}
+spec:
+  # ClusterIP = only reachable inside the cluster (from values.yaml).
+  type: {{ .Values.service.type }}
+  # selector = "send calls to pods that have THIS label".
+  # The same helper as the Deployment's pods, so they always match.
+  selector:
+    {{- include "flexsim-service.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      # port       = the port OTHER pods call on the Service
+      # targetPort = the port on the POD; "http" is the name we gave
+      #              the container port in deployment.yaml
+      # We keep both the same (e.g. 8081), so the URL is simple.
+      port: {{ include "flexsim-service.port" . }}
+      targetPort: http
+      protocol: TCP
