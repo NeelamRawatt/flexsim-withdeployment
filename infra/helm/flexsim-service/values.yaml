@@ -172,3 +172,6 @@ gateway:
   name: flexsim-gateway
   paths: []
   healthPath: /actuator/health/readiness
+  # sectionName: attach only to ONE listener of the Gateway. Empty = all listeners (dev: http only).
+  # prod: "https" (the http listener only redirects to https).
+  sectionName: ""

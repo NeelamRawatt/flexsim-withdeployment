@@ -12,6 +12,8 @@
 resource "random_password" "postgres_admin" {
   length  = 32
   special = false
+  # ROTATION: change secret_rotation_id in the .tfvars -> a NEW password is made on the next apply.
+  keepers = { rotation = var.secret_rotation_id }
 }
 
 # ---------------------------------------------------------------------
@@ -76,7 +78,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
   # Size: B_Standard_B1ms = smallest (1 CPU, 2 GB). 32768 MB = 32 GB disk (minimum).
   sku_name              = var.postgres_sku
   storage_mb            = 32768
-  backup_retention_days = 7   # automatic backups, restore to any minute of the last 7 days
+  backup_retention_days = var.postgres_backup_retention_days   # dev 7, prod 35: restore to any minute in that window
 
   tags = local.common_tags
 
@@ -125,6 +127,7 @@ resource "random_password" "service_db" {
   for_each = toset(local.db_services)
   length   = 32
   special  = false
+  keepers  = { rotation = var.secret_rotation_id }   # change it -> new passwords (rotation)
 }
 
 # Key Vault labels: auth-db-password, experiment-db-password, ... , ai-db-password
@@ -140,6 +143,7 @@ resource "azurerm_key_vault_secret" "service_db_password" {
 resource "random_password" "jwt" {
   length  = 64
   special = false
+  keepers = { rotation = var.secret_rotation_id }   # change it -> new JWT secret (everyone logs in again)
 }
 
 resource "azurerm_key_vault_secret" "jwt_secret" {

@@ -12,19 +12,19 @@
 #      az identity create --name id-flexsim-github --resource-group rg-flexsim-tfstate --location swedencentral
 #    Terraform only LOOKS IT UP ("data" = ask, create nothing).
 data "azurerm_user_assigned_identity" "github" {
-  name                = "id-flexsim-github"
-  resource_group_name = "rg-flexsim-tfstate"
+  name                = var.github_identity_name      # dev: id-flexsim-github
+  resource_group_name = var.tfstate_resource_group   # dev: rg-flexsim-tfstate (never destroyed)
 }
 
 # 2) Trust link: only GitHub Actions jobs from OUR repo that use the GitHub environment "dev".
 #    (A fork, another repo, or a job without environment "dev" cannot use this ID card.)
 resource "azurerm_federated_identity_credential" "github_dev" {
-  name                = "fic-github-dev"
+  name                = "fic-github-${var.environment}"   # fic-github-dev / fic-github-prod
   resource_group_name = data.azurerm_user_assigned_identity.github.resource_group_name
   parent_id           = data.azurerm_user_assigned_identity.github.id
   audience            = ["api://AzureADTokenExchange"]
   issuer              = "https://token.actions.githubusercontent.com"   # GitHub Actions issues the ID cards
-  subject             = "repo:${var.github_repo}:environment:dev"
+  subject             = "repo:${var.github_repo}:environment:${var.environment}"   # GitHub environment dev / prod
 }
 
 # 3) Permission: upload (push) images to our registry.

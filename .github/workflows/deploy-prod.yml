@@ -1,0 +1,98 @@
+# =====================================================================
+# deploy-prod.yml   (folder: .github\workflows)
+# CD to PRODUCTION. It NEVER runs by itself:
+#   1) a person clicks "Run workflow" in GitHub -> Actions -> deploy-prod
+#      and chooses the service + the commit (the one already tested in dev)
+#   2) the job waits for APPROVAL (GitHub environment "prod" has required reviewers)
+#   3) after approval: log in to the COMPANY Azure with OIDC (no password),
+#      build that exact commit, push it to the PROD registry, helm upgrade with azure-prod values.
+#
+# Needs (GitHub -> Settings -> Environments -> prod):
+#   Required reviewers: the team lead / approver
+#   Deployment branches: main only
+#   Variables: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID  (prod IDs, not secrets)
+#              PROD_RESOURCE_GROUP, PROD_AKS_NAME, PROD_ACR_NAME, PROD_APP_IDENTITY
+# =====================================================================
+name: deploy-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Which service to deploy"
+        required: true
+        type: choice
+        options:
+          - auth-service
+          - experiment-service
+          - file-service
+          - simulation-service
+          - kpi-service
+      commit:
+        description: "Commit SHA to deploy (the one already working in dev)"
+        required: true
+        type: string
+
+env:
+  NAMESPACE: flexsim
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: prod            # waits here for the approver to click "Approve"
+    permissions:
+      contents: read
+      id-token: write            # OIDC "ID card" for the Azure login
+    concurrency:
+      group: deploy-prod-${{ inputs.service }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Download the chosen commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit }}
+
+      - name: Log in to the company Azure (OIDC, no password)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build and push the image to the PROD registry
+        run: |
+          IMAGE="${{ vars.PROD_ACR_NAME }}.azurecr.io/${{ inputs.service }}:${{ inputs.commit }}"
+          az acr login --name "${{ vars.PROD_ACR_NAME }}"
+          docker build -t "$IMAGE" "services/${{ inputs.service }}"
+          docker push "$IMAGE"
+          echo "Pushed $IMAGE"
+
+      - name: Connect to the PROD cluster
+        run: |
+          az aks get-credentials --resource-group "${{ vars.PROD_RESOURCE_GROUP }}" --name "${{ vars.PROD_AKS_NAME }}" --overwrite-existing
+          kubectl get nodes
+          echo "APP_CLIENT_ID=$(az identity show --resource-group "${{ vars.PROD_RESOURCE_GROUP }}" --name "${{ vars.PROD_APP_IDENTITY }}" --query clientId -o tsv)" >> "$GITHUB_ENV"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      # --atomic: if the new version does not become healthy, Helm ROLLS BACK automatically.
+      - name: Deploy with Helm (auto-rollback on failure)
+        run: |
+          helm upgrade --install "${{ inputs.service }}" infra/helm/flexsim-service \
+            --namespace "$NAMESPACE" \
+            -f "infra/helm/values/azure-prod/${{ inputs.service }}.yaml" \
+            --set "image.tag=${{ inputs.commit }}" \
+            --set "azureWorkloadIdentity.clientId=$APP_CLIENT_ID" \
+            --set "keyVault.tenantId=${{ vars.AZURE_TENANT_ID }}" \
+            --atomic --wait --timeout 15m
+          kubectl -n "$NAMESPACE" get pods -l "app=${{ inputs.service }}"
+          helm history "${{ inputs.service }}" -n "$NAMESPACE" --max 5
+
+      - name: Show details if it failed
+        if: failure()
+        run: |
+          kubectl -n "$NAMESPACE" describe pod -l "app=${{ inputs.service }}" | tail -40 || true
+          kubectl -n "$NAMESPACE" logs "deployment/${{ inputs.service }}" --tail=60 || true

@@ -49,6 +49,13 @@ resource "azurerm_kubernetes_cluster" "main" {
     secret_rotation_enabled = true   # picks up changed secrets automatically
   }
 
+  # Container Insights: send every pod's logs + CPU/memory to the Log Analytics workspace
+  # (monitoring.tf). msi_auth = it logs in with AKS's own ID card, no key.
+  oms_agent {
+    log_analytics_workspace_id      = azurerm_log_analytics_workspace.main.id
+    msi_auth_for_monitoring_enabled = true
+  }
+
   tags = local.common_tags
 }
 

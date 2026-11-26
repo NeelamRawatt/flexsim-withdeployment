@@ -1,0 +1,44 @@
+# =====================================================================
+# certificate.yaml   (folder: infra\k8s\azure-prod)
+# Free, trusted HTTPS certificate from Let's Encrypt, made and RENEWED automatically
+# by cert-manager (renews ~30 days before the 90-day expiry).
+#   ClusterIssuer = "who signs the certificate, and how they check we own the domain"
+#   Certificate   = "please make a certificate for <PROD-DOMAIN>, store it in secret flexsim-tls"
+# The check (HTTP-01): Let's Encrypt calls http://<PROD-DOMAIN>/.well-known/acme-challenge/...
+# and cert-manager answers through our Gateway's "http" listener.
+# Needs: DNS CNAME for <PROD-DOMAIN> already pointing to the gateway; cert-manager installed
+# with Gateway API support (see docs\GO-LIVE-RUNBOOK.md).
+# If the company gives its OWN certificate instead: skip this file and create the secret:
+#   kubectl -n flexsim create secret tls flexsim-tls --cert=fullchain.pem --key=privkey.pem
+# =====================================================================
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: <TEAM-EMAIL>                      # Let's Encrypt sends expiry warnings here
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key     # our Let's Encrypt account key (made automatically)
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - name: flexsim-gateway
+                namespace: flexsim
+                kind: Gateway
+                sectionName: http
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: flexsim-tls
+  namespace: flexsim
+spec:
+  secretName: flexsim-tls
+  dnsNames:
+    - <PROD-DOMAIN>
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer

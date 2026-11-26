@@ -123,3 +123,45 @@ variable "github_repo" {
   description = "GitHub repository allowed to deploy, exactly as in GitHub OIDC subject: owner@ownerId/repo@repoId"
   type        = string
 }
+
+variable "worker_vm_size" {
+  description = "Size of the Windows worker VM, e.g. Standard_D2s_v6 (2 CPU, 8 GB)"
+  type        = string
+}
+
+variable "admin_ip" {
+  description = "My public internet address allowed to use Remote Desktop on the worker VM, e.g. 49.36.123.45/32 (check with: Invoke-RestMethod https://api.ipify.org)"
+  type        = string
+}
+
+variable "alert_email" {
+  description = "Email address that receives monitoring alerts"
+  type        = string
+}
+
+# ---------------- go-live: answers that differ between dev and prod ----------------
+
+variable "enable_worker_rdp" {
+  description = "true = worker VM gets a public IP + RDP rule for admin_ip (dev). false = private only (prod: use Azure Bastion or VPN)"
+  type        = bool
+}
+
+variable "postgres_backup_retention_days" {
+  description = "How many days of automatic PostgreSQL backups to keep (7 to 35). dev 7, prod 35"
+  type        = number
+}
+
+variable "tfstate_resource_group" {
+  description = "Resource group that is never destroyed (holds the Terraform state and the GitHub identity)"
+  type        = string
+}
+
+variable "github_identity_name" {
+  description = "Name of the GitHub Actions managed identity created once by az CLI in tfstate_resource_group"
+  type        = string
+}
+
+variable "secret_rotation_id" {
+  description = "Change this text (e.g. today's date) to ROTATE the DB passwords + JWT secret on the next apply. Then run infra\\scripts\\rotate-secrets.ps1"
+  type        = string
+}

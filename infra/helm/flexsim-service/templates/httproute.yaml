@@ -22,6 +22,10 @@ spec:
   parentRefs:
     - name: {{ .Values.gateway.name }}
       namespace: {{ .Release.Namespace }}
+      {{- if .Values.gateway.sectionName }}
+      # Attach ONLY to this listener of the Gateway (prod: "https"; http just redirects to https)
+      sectionName: {{ .Values.gateway.sectionName }}
+      {{- end }}
   rules:
     - matches:
         {{- range .Values.gateway.paths }}

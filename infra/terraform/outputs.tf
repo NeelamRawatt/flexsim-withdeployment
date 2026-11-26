@@ -79,3 +79,18 @@ output "subscription_id" {
   description = "Subscription ID (copy into GitHub: variable AZURE_SUBSCRIPTION_ID)"
   value       = var.subscription_id
 }
+
+output "worker_vm_private_ip" {
+  description = "Private address of the Windows worker VM (inside the VNet)"
+  value       = azurerm_network_interface.worker.private_ip_address
+}
+
+output "worker_vm_public_ip" {
+  description = "Public address for Remote Desktop to the worker VM (only reachable from admin_ip)"
+  value       = var.enable_worker_rdp ? azurerm_public_ip.worker[0].ip_address : "none (no public RDP in this environment)"
+}
+
+output "log_analytics_workspace_name" {
+  description = "Central logbook (search logs with KQL in the portal: Logs)"
+  value       = azurerm_log_analytics_workspace.main.name
+}

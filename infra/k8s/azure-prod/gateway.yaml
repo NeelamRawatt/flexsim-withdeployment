@@ -1,0 +1,60 @@
+# =====================================================================
+# gateway.yaml   (folder: infra\k8s\azure-prod)
+# PRODUCTION front door: HTTPS on the company domain.
+#   listener "http"  (port 80):  only redirects to https (+ lets Let's Encrypt check the domain)
+#   listener "https" (port 443): the real app; TLS certificate from the secret flexsim-tls
+#                                 (made and renewed automatically by cert-manager, see certificate.yaml)
+# The 5 services' HTTPRoutes attach ONLY to "https" (values azure-prod: gateway.sectionName: https).
+# Fill <PROD-ALB-ID> (Terraform output alb_id) and <PROD-DOMAIN> (e.g. flexsim.company.com).
+# DNS (company IT): CNAME  <PROD-DOMAIN>  ->  <Terraform output alb_frontend_fqdn>
+# =====================================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: flexsim-gateway
+  namespace: flexsim
+  annotations:
+    alb.networking.azure.io/alb-id: <PROD-ALB-ID>
+spec:
+  gatewayClassName: azure-alb-external
+  addresses:
+    - type: alb.networking.azure.io/alb-frontend
+      value: fe-flexsim
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      hostname: <PROD-DOMAIN>
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      port: 443
+      protocol: HTTPS
+      hostname: <PROD-DOMAIN>
+      tls:
+        mode: Terminate                 # the gateway decrypts HTTPS; inside the network it is plain http
+        certificateRefs:
+          - kind: Secret
+            name: flexsim-tls            # created by cert-manager (certificate.yaml)
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+# Every plain http request -> permanent redirect (301) to the same address on https.
+# (cert-manager's own temporary route for /.well-known/acme-challenge/... is more specific, so it still works.)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-to-https-redirect
+  namespace: flexsim
+spec:
+  parentRefs:
+    - name: flexsim-gateway
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
