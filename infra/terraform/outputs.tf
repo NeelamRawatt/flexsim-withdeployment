@@ -69,3 +69,13 @@ output "alb_identity_client_id" {
   description = "Client ID of the ALB Controller's Azure identity (used when installing the controller)"
   value       = azurerm_user_assigned_identity.alb.client_id
 }
+
+output "github_identity_client_id" {
+  description = "Client ID for GitHub Actions OIDC login (copy into GitHub: variable AZURE_CLIENT_ID)"
+  value       = data.azurerm_user_assigned_identity.github.client_id
+}
+
+output "subscription_id" {
+  description = "Subscription ID (copy into GitHub: variable AZURE_SUBSCRIPTION_ID)"
+  value       = var.subscription_id
+}

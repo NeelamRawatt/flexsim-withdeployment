@@ -87,3 +87,16 @@ jobs:
             aquasec/trivy:0.57.1 \
             image --severity HIGH,CRITICAL \
             --ignore-unfixed --exit-code 0 auth-service:ci
+
+  # ---------- Stage 4: CD = put it live on the Azure DEV cluster ----------
+  # Only after build + tests + image build passed, and only for pushes to main
+  # (not for pull requests). Uses the shared deploy recipe (reusable workflow).
+  deploy-dev:
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      id-token: write     # needed for the Azure login without a password (OIDC)
+    uses: ./.github/workflows/deploy-service-dev.yml
+    with:
+      service: auth-service

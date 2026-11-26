@@ -1,0 +1,114 @@
+# =====================================================================
+# deploy-service-dev.yml   (folder: .github\workflows)
+# CD = Continuous Deployment: put ONE service live on the Azure DEV cluster (AKS).
+#
+# This is a REUSABLE workflow ("workflow_call"): it does not run by itself.
+# Each service's CI workflow CALLS it at the end, after build + tests passed,
+# and gives the service name. One deploy recipe, used by all 5 services.
+#
+# Steps: log in to Azure WITHOUT a password (OIDC) -> skip politely if the dev
+# cluster is destroyed -> build the image tagged with the Git commit ID ->
+# push it to ACR -> helm upgrade on AKS with the same chart + azure-dev values.
+#
+# Needs (GitHub -> Settings -> Environments -> dev -> variables):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID   (IDs, not secrets)
+# =====================================================================
+name: deploy-service-dev
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Service folder / Helm release name, e.g. auth-service"
+        required: true
+        type: string
+
+# The names of our Azure dev setup (same as Terraform dev.tfvars)
+env:
+  RESOURCE_GROUP: rg-flexsim-dev
+  AKS_NAME: aks-flexsim-dev
+  ACR_NAME: acrflexsimdevneelam
+  NAMESPACE: flexsim
+  APP_IDENTITY: id-flexsim-dev-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # "dev" environment: only branch main may deploy (GitHub setting), and the
+    # Azure trust link only accepts jobs that use THIS environment.
+    environment: dev
+    permissions:
+      contents: read     # read the code
+      id-token: write    # allow GitHub to issue the OIDC "ID card" for the Azure login
+    # Two runs for the same service never deploy at the same time (the newer one waits)
+    concurrency:
+      group: deploy-dev-${{ inputs.service }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Download the code
+        uses: actions/checkout@v4
+
+      # 1) Log in to Azure with OIDC: no password stored in GitHub.
+      - name: Log in to Azure (OIDC, no password)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # 2) Our dev setup is destroyed every evening to save money.
+      #    If the cluster does not exist right now, skip the rest (the run stays green).
+      - name: Is the dev cluster running?
+        id: check
+        run: |
+          if az aks show --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --query name -o tsv > /dev/null 2>&1; then
+            echo "running=true" >> "$GITHUB_OUTPUT"
+            echo "Dev cluster is running -> deploy."
+          else
+            echo "running=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Dev cluster $AKS_NAME does not exist (destroyed to save money). Deploy skipped."
+          fi
+
+      # 3) Build the image and push it to ACR, tagged with the Git commit ID (unique, traceable).
+      - name: Build and push the image
+        if: steps.check.outputs.running == 'true'
+        run: |
+          IMAGE="$ACR_NAME.azurecr.io/${{ inputs.service }}:${{ github.sha }}"
+          az acr login --name "$ACR_NAME"
+          docker build -t "$IMAGE" "services/${{ inputs.service }}"
+          docker push "$IMAGE"
+          echo "Pushed $IMAGE"
+
+      # 4) Get the cluster "key" and the values that change after every rebuild.
+      - name: Connect to AKS
+        if: steps.check.outputs.running == 'true'
+        run: |
+          az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --overwrite-existing
+          kubectl get nodes
+          echo "APP_CLIENT_ID=$(az identity show --resource-group "$RESOURCE_GROUP" --name "$APP_IDENTITY" --query clientId -o tsv)" >> "$GITHUB_ENV"
+
+      - name: Install Helm
+        if: steps.check.outputs.running == 'true'
+        uses: azure/setup-helm@v4
+
+      # 5) helm upgrade: same chart + azure-dev values; only the image tag is new.
+      - name: Deploy with Helm
+        if: steps.check.outputs.running == 'true'
+        run: |
+          helm upgrade --install "${{ inputs.service }}" infra/helm/flexsim-service \
+            --namespace "$NAMESPACE" \
+            -f "infra/helm/values/azure-dev/${{ inputs.service }}.yaml" \
+            --set "image.tag=${{ github.sha }}" \
+            --set "azureWorkloadIdentity.clientId=$APP_CLIENT_ID" \
+            --set "keyVault.tenantId=${{ vars.AZURE_TENANT_ID }}" \
+            --wait --timeout 10m
+          kubectl -n "$NAMESPACE" get pods -l "app=${{ inputs.service }}"
+
+      # If the deploy failed, show why (pod events + last log lines) in the GitHub log.
+      - name: Show details if it failed
+        if: failure() && steps.check.outputs.running == 'true'
+        run: |
+          kubectl -n "$NAMESPACE" describe pod -l "app=${{ inputs.service }}" | tail -40 || true
+          kubectl -n "$NAMESPACE" logs "deployment/${{ inputs.service }}" --tail=60 || true

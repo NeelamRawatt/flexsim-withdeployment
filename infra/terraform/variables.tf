@@ -118,3 +118,8 @@ variable "aks_node_count" {
   description = "How many AKS servers (nodes): 1 for practice, 2+ for production"
   type        = number   # a number, written without quotes
 }
+
+variable "github_repo" {
+  description = "GitHub repository allowed to deploy (owner/name), e.g. NeelamRawatt/flexsim-withdeployment"
+  type        = string
+}
