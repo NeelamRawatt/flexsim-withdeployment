@@ -1,0 +1,31 @@
+# =====================================================================
+# .gitignore   (folder: infra\terraform)
+# Files Git must NEVER save.
+# =====================================================================
+
+# Downloaded plug-ins (big, re-downloaded by "terraform init")
+.terraform/
+
+# STATE = Terraform's notebook of what it created. It can contain
+# PASSWORDS and private details, so it never goes to Git.
+# (Later we move it to an Azure storage account = "remote state".)
+*.tfstate
+*.tfstate.*
+
+# Saved plans (can contain secrets too)
+*.tfplan
+tfplan
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Local override files (personal experiments)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# KEEP in Git (do not ignore): .terraform.lock.hcl
+# It records the EXACT provider versions, so everyone gets the same ones
+# (like a Maven/npm lock file).

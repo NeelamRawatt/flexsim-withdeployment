@@ -17,3 +17,8 @@ NOT understood yet — everything after the folder structure:
 - [ ] Why the new pods restarted at ~2 minutes (startup probe limit, many Java apps starting together)
 - [ ] Practise a real Helm upgrade (change a value → helm upgrade → watch only that service restart) — skipped on 2026-11-21
 - [ ] `helm history` and `helm rollback` (go back to the last good version) — practise it
+
+## Azure (noted 2026-11-23)
+- [ ] Study Azure from scratch at the end of the project, the same way Helm and Terraform were explained
+      (tenant, subscription, resource group, resources, regions, RBAC roles, networking, AKS, PostgreSQL, Event Hubs, Key Vault, ACR, costs)
+- [ ] RBAC (Role-Based Access Control): roles Reader / Contributor / Owner, and levels (subscription / resource group / resource) — only mentioned briefly on 2026-11-23, not studied properly
