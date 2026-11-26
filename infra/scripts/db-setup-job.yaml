@@ -1,0 +1,68 @@
+# =====================================================================
+# db-setup-job.yaml   (folder: infra\scripts)
+# A Kubernetes JOB = a pod that runs ONCE, finishes, and stops (not a service that runs forever).
+# It runs INSIDE AKS (inside our private network), so it can reach the private PostgreSQL.
+# It creates one database user per service (auth_user, ...), sets its password,
+# and makes it the owner of ITS OWN database only.
+#
+# Do not apply this file by hand: create-db-users.ps1 creates the secret it needs,
+# runs it, shows the result, and cleans everything up.
+# =====================================================================
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-setup
+  namespace: flexsim
+spec:
+  backoffLimit: 1                 # if it fails, try only once more
+  ttlSecondsAfterFinished: 600    # Kubernetes deletes the finished job after 10 minutes anyway
+  template:
+    spec:
+      restartPolicy: Never        # a Job: run once, do not restart when finished
+      containers:
+        - name: psql
+          image: postgres:16      # official PostgreSQL image; we only use its "psql" tool
+          # Connection details + all passwords come from the TEMPORARY secret made by the script:
+          #   PGHOST, PGUSER, PGPASSWORD (admin) and AUTH_PASS, EXPERIMENT_PASS, ... (service users)
+          envFrom:
+            - secretRef:
+                name: db-setup-secret
+          env:
+            - name: PGDATABASE    # connect to the built-in "postgres" database to run admin commands
+              value: postgres
+            - name: PGSSLMODE     # Azure PostgreSQL requires an encrypted connection
+              value: require
+          command: ["bash", "-ec"]   # -e = stop at the first error, -c = run the text below
+          args:
+            - |
+              # create_user <name> <password>
+              #   -> user <name>_user, owner of database <name>_db
+              # Idempotent: create the user if missing, otherwise just update the password.
+              create_user() {
+                local usr="${1}_user" db="${1}_db" pass="$2"
+                psql -v ON_ERROR_STOP=1 -v usr="$usr" -v pass="$pass" -v db="$db" <<'SQL'
+              SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'usr', :'pass')
+                WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'usr') \gexec
+              SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'usr', :'pass') \gexec
+              SELECT format('GRANT %I TO CURRENT_USER', :'usr') \gexec
+              SELECT format('ALTER DATABASE %I OWNER TO %I', :'db', :'usr') \gexec
+              SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'db') \gexec
+              SQL
+                # Azure PostgreSQL: owning the database does NOT give rights on schema "public"
+                # (it belongs to Azure's admin group). Connect INTO the service's database and
+                # allow its user to create tables there (needed by Flyway).
+                psql -v ON_ERROR_STOP=1 -v usr="$usr" -d "$db" <<'SQL'
+              SELECT format('GRANT ALL ON SCHEMA public TO %I', :'usr') \gexec
+              SQL
+                echo "OK: ${usr} owns ${db}"
+              }
+              create_user auth       "$AUTH_PASS"
+              create_user experiment "$EXPERIMENT_PASS"
+              create_user file       "$FILE_PASS"
+              create_user simulation "$SIMULATION_PASS"
+              create_user kpi        "$KPI_PASS"
+              create_user ai         "$AI_PASS"
+              echo "All 6 database users are ready."
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { memory: 128Mi }

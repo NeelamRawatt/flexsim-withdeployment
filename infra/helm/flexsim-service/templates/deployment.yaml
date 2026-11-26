@@ -23,6 +23,8 @@ metadata:
     {{- include "flexsim-service.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
   selector:
     matchLabels:
       {{- include "flexsim-service.selectorLabels" . | nindent 6 }}
@@ -30,6 +32,10 @@ spec:
     metadata:
       labels:
         {{- include "flexsim-service.labels" . | nindent 8 }}
+        {{- if .Values.azureWorkloadIdentity.enabled }}
+        # Azure: "this pod uses workload identity" (AKS then gives it an Azure token)
+        azure.workload.identity/use: "true"
+        {{- end }}
       annotations:
         # CHECKSUM: a fingerprint of the ConfigMap's content.
         # Problem it solves: pods read the ConfigMap only when they START.
@@ -39,6 +45,10 @@ spec:
         # template changes -> Kubernetes does a rolling update automatically.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
+      {{- if .Values.serviceAccount.create }}
+      # Azure: run the pod with this service's Kubernetes ID card (see serviceaccount.yaml)
+      serviceAccountName: {{ include "flexsim-service.name" . }}
+      {{- end }}
       containers:
         - name: {{ include "flexsim-service.name" . }}
           image: {{ include "flexsim-service.image" . }}
@@ -82,3 +92,19 @@ spec:
 
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.keyVault.enabled }}
+          # Azure: the Key Vault helper only fetches/syncs secrets for pods that MOUNT it.
+          volumeMounts:
+            - name: kv-secrets
+              mountPath: /mnt/secrets-store
+              readOnly: true
+          {{- end }}
+      {{- if .Values.keyVault.enabled }}
+      volumes:
+        - name: kv-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ include "flexsim-service.name" . }}-kv
+      {{- end }}

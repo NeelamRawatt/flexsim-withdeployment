@@ -44,3 +44,13 @@ output "aks_name" {
   description = "Name of the AKS cluster (used to connect kubectl)"
   value       = azurerm_kubernetes_cluster.main.name
 }
+
+output "app_identity_client_id" {
+  description = "Client ID of the pods' Azure identity (used in the Helm values)"
+  value       = azurerm_user_assigned_identity.app.client_id
+}
+
+output "tenant_id" {
+  description = "Azure tenant ID (used in the Helm values)"
+  value       = data.azurerm_client_config.current.tenant_id
+}

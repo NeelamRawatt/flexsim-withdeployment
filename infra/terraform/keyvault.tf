@@ -56,3 +56,23 @@ resource "azurerm_role_assignment" "kv_secrets_officer_me" {
   role_definition_name = "Key Vault Secrets Officer"
   principal_id         = data.azurerm_client_config.current.object_id
 }
+
+# ---------------------------------------------------------------------
+# Passwords for the FIRST LOGIN USERS that auth-service creates at its first start
+# ("developer" = you, "flexsim-worker" = the Windows worker's account).
+# Read yours with:
+#   az keyvault secret show --vault-name kv-flexsim-dev-neelam --name auth-developer-password --query value -o tsv
+# ---------------------------------------------------------------------
+resource "random_password" "auth_bootstrap" {
+  for_each = toset(["developer", "worker"])
+  length   = 24
+  special  = false
+}
+
+resource "azurerm_key_vault_secret" "auth_bootstrap_password" {
+  for_each     = toset(["developer", "worker"])
+  name         = "auth-${each.key}-password"     # auth-developer-password, auth-worker-password
+  value        = random_password.auth_bootstrap[each.key].result
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.kv_secrets_officer_me]
+}

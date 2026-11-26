@@ -79,3 +79,16 @@ resource "azurerm_key_vault_secret" "eventhubs_connection_string" {
 
   depends_on = [azurerm_role_assignment.kv_secrets_officer_me]
 }
+
+# ---------------------------------------------------------------------
+# 5) The Kafka LOGIN LINE (JAAS config) that Spring Kafka needs, built here and
+#    saved in Key Vault. "$ConnectionString" is FIXED text Event Hubs expects
+#    (not a variable). \" = a quote inside the text. ${...} = insert the value.
+#    Pods get it as SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG (no code change).
+# ---------------------------------------------------------------------
+resource "azurerm_key_vault_secret" "kafka_sasl_jaas_config" {
+  name         = "kafka-sasl-jaas-config"
+  value        = "org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"${azurerm_eventhub_namespace_authorization_rule.app.primary_connection_string}\";"
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.kv_secrets_officer_me]
+}

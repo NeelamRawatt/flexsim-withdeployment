@@ -120,3 +120,43 @@ probes:
 # ---------------------------------------------------------------------
 securityContext:
   allowPrivilegeEscalation: false
+
+# =====================================================================
+# AZURE FEATURES (all OFF by default -> the laptop setup is unchanged).
+# The Azure values files (values\azure-dev\*.yaml) switch them ON.
+# =====================================================================
+
+# serviceAccount: create a Kubernetes "ID card" for this service
+# (named like the service, e.g. auth-service).
+serviceAccount:
+  create: false
+
+# azureWorkloadIdentity: link that Kubernetes ID card to the Azure ID card
+# (the pods' managed identity). clientId = Terraform output "app_identity_client_id".
+azureWorkloadIdentity:
+  enabled: false
+  clientId: ""
+
+# keyVault: take the passwords from Azure Key Vault (instead of "kubectl create secret").
+#   name     = Key Vault name (e.g. kv-flexsim-dev-neelam)
+#   tenantId = Terraform output "tenant_id"
+#   secrets  = map  ENV_VARIABLE_NAME: key-vault-secret-label
+#              e.g. POSTGRES_PASSWORD: auth-db-password
+# The helper (Secrets Store CSI driver) copies them into the Kubernetes Secret
+# "<name>-secret", which the pod already reads with envFrom.
+keyVault:
+  enabled: false
+  name: ""
+  tenantId: ""
+  secrets: {}
+
+# ---------------------------------------------------------------------
+# strategy: how a new version replaces the old one.
+# Default (Kubernetes' own): start the NEW pod first, then stop the old one (needs spare CPU).
+# On a tiny node (azure-dev) the script overrides maxSurge to 0: stop old first, then start new.
+# ---------------------------------------------------------------------
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 25%
+    maxUnavailable: 25%

@@ -109,3 +109,42 @@ resource "azurerm_postgresql_flexible_server_database" "service" {
   charset   = "UTF8"        # stores text in every language
   collation = "en_US.utf8"  # text sorting rules
 }
+
+# ---------------------------------------------------------------------
+# 7) PASSWORDS for each service's own database user + the shared JWT secret.
+#    Made by Terraform, stored in Key Vault (labels below). Nobody types them; not in Git.
+#    The USERS themselves (auth_user, ...) are created inside PostgreSQL by
+#    infra\scripts\create-db-users.ps1 (the DB is private, so it runs from inside AKS).
+# ---------------------------------------------------------------------
+locals {
+  db_services = ["auth", "experiment", "file", "simulation", "kpi", "ai"]
+}
+
+# One random password per service (32 letters/numbers).
+resource "random_password" "service_db" {
+  for_each = toset(local.db_services)
+  length   = 32
+  special  = false
+}
+
+# Key Vault labels: auth-db-password, experiment-db-password, ... , ai-db-password
+resource "azurerm_key_vault_secret" "service_db_password" {
+  for_each     = toset(local.db_services)
+  name         = "${each.key}-db-password"
+  value        = random_password.service_db[each.key].result   # the password made for this same name
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.kv_secrets_officer_me]
+}
+
+# One shared JWT secret: auth-service signs login tokens with it, the others check them.
+resource "random_password" "jwt" {
+  length  = 64
+  special = false
+}
+
+resource "azurerm_key_vault_secret" "jwt_secret" {
+  name         = "jwt-secret"
+  value        = random_password.jwt.result
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.kv_secrets_officer_me]
+}

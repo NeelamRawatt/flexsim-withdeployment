@@ -1,0 +1,64 @@
+# =====================================================================
+# simulation-service.yaml   (folder: infra\helm\values\azure-dev)
+# The "guest list" for simulation-service in AZURE (dev = personal practice account, AKS).
+# Same chart as the laptop; only these answers differ.
+#
+# NOT written here (they change after every destroy/apply), given at deploy time
+# by infra\scripts\deploy-azure-dev.ps1 from the Terraform outputs:
+#   azureWorkloadIdentity.clientId   (app_identity_client_id)
+#   keyVault.tenantId                (tenant_id)
+#
+# NO PASSWORDS HERE. Passwords stay in Key Vault; "keyVault.secrets" only lists
+# their LABELS (env variable name: key-vault-label).
+# =====================================================================
+
+name: simulation-service
+port: 8083
+
+# 1 copy in dev (the single 2-CPU node is shared by all services). Production: 2+.
+replicaCount: 1
+
+# Dev: book (request) less CPU so all 5 services fit on the single 2-CPU node.
+# Only cpu changes; Helm merges this with the chart defaults (memory stays 512Mi/768Mi).
+# Production: keep 250m and add more nodes instead.
+resources:
+  requests:
+    cpu: 100m
+
+image:
+  repository: acrflexsimdevneelam.azurecr.io/simulation-service   # from our Azure registry (ACR)
+  tag: "0.1.0"
+
+# Azure features ON
+serviceAccount:
+  create: true            # Kubernetes ID card "simulation-service" (Terraform trusts it)
+azureWorkloadIdentity:
+  enabled: true           # clientId is given by the deploy script
+keyVault:
+  enabled: true
+  name: kv-flexsim-dev-neelam   # tenantId is given by the deploy script
+  # Key Vault label for each secret env variable (ENV_NAME: key-vault-label)
+  secrets:
+    POSTGRES_PASSWORD: simulation-db-password
+    APP_JWT_SECRET: jwt-secret
+    SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: kafka-sasl-jaas-config
+
+# Non-secret settings -> ConfigMap -> environment variables
+config:
+  # Dev DB (B1ms) allows only 50 connections in total. Spring's default is 10 per service,
+  # so 5 services would use them all. Cap each service at 4 (about 20 in total).
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 4
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
+  # Private Azure PostgreSQL (found by name through the private DNS zone)
+  POSTGRES_HOST: psql-flexsim-dev-neelam.postgres.database.azure.com
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: simulation_user    # not secret (the password is in Key Vault)
+  # Event Hubs (Kafka endpoint): login + encryption. The login line itself is in Key Vault.
+  KAFKA_BOOTSTRAP_SERVERS: evh-flexsim-dev-neelam.servicebus.windows.net:9093
+  SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_SSL
+  SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: PLAIN
+  # Other services by their Kubernetes Service name (cluster DNS)
+  EXPERIMENT_SERVICE_URL: http://experiment-service:8082
+  FILE_SERVICE_URL: http://file-service:8086
+  # Browser origin allowed to call the API (changes to the real https address with the gateway)
+  APP_ALLOWED_ORIGINS: http://localhost:3000
