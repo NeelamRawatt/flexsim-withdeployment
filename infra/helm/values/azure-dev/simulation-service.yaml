@@ -43,6 +43,13 @@ keyVault:
     APP_JWT_SECRET: jwt-secret
     SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG: kafka-sasl-jaas-config
 
+# Behind the shared main gate: requests starting with these paths come to this service
+gateway:
+  enabled: true
+  paths:
+    - "/api/simulation"
+    - "/api/flexsim/progress"
+
 # Non-secret settings -> ConfigMap -> environment variables
 config:
   # Dev DB (B1ms) allows only 50 connections in total. Spring's default is 10 per service,

@@ -1,0 +1,36 @@
+{{- /*
+=====================================================================
+httproute.yaml   (folder: infra\helm\flexsim-service\templates)
+This service's ROUTING RULES on the shared main gate (Kubernetes Gateway API):
+"requests whose address STARTS WITH one of gateway.paths -> this service".
+Made ONLY when gateway.enabled = true (Azure). Laptop: nothing is made.
+=====================================================================
+*/ -}}
+{{- if .Values.gateway.enabled }}
+{{- if not .Values.gateway.paths }}
+{{- fail "values: 'gateway.paths' must list at least one path when gateway.enabled is true" }}
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "flexsim-service.name" . }}-route
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flexsim-service.labels" . | nindent 4 }}
+spec:
+  # Attach to the shared Gateway (the front door)
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      namespace: {{ .Release.Namespace }}
+  rules:
+    - matches:
+        {{- range .Values.gateway.paths }}
+        - path:
+            type: PathPrefix          # any address that STARTS WITH this
+            value: {{ . | quote }}
+        {{- end }}
+      # Send them to this service's Kubernetes Service
+      backendRefs:
+        - name: {{ include "flexsim-service.name" . }}
+          port: {{ include "flexsim-service.port" . }}
+{{- end }}

@@ -1,0 +1,30 @@
+# =====================================================================
+# gateway.yaml   (folder: infra\k8s\azure-dev)
+# The ONE shared front door (Kubernetes Gateway API) for all 5 services.
+# It uses our Azure gateway "alb-flexsim-dev" (Application Gateway for Containers)
+# and its public front door "fe-flexsim", and listens on port 80 (http).
+# Each service brings its own HTTPRoute (in the Helm chart) that attaches here.
+#
+# __ALB_ID__ is replaced by deploy-azure-dev.ps1 with the Terraform output "alb_id"
+# (it changes after every destroy/apply). Do not apply this file by hand.
+# HTTPS (port 443 + certificate) comes later with a real domain.
+# =====================================================================
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: flexsim-gateway
+  namespace: flexsim
+  annotations:
+    alb.networking.azure.io/alb-id: __ALB_ID__     # which Azure gateway to use
+spec:
+  gatewayClassName: azure-alb-external             # "use Application Gateway for Containers"
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same                                # only routes from namespace flexsim may attach
+  addresses:
+    - type: alb.networking.azure.io/alb-frontend
+      value: fe-flexsim                             # the public front door made by Terraform

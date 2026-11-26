@@ -54,3 +54,18 @@ output "tenant_id" {
   description = "Azure tenant ID (used in the Helm values)"
   value       = data.azurerm_client_config.current.tenant_id
 }
+
+output "alb_id" {
+  description = "ID of Application Gateway for Containers (used by the Kubernetes Gateway)"
+  value       = azurerm_application_load_balancer.main.id
+}
+
+output "alb_frontend_fqdn" {
+  description = "Public address of the main gate"
+  value       = azurerm_application_load_balancer_frontend.main.fully_qualified_domain_name
+}
+
+output "alb_identity_client_id" {
+  description = "Client ID of the ALB Controller's Azure identity (used when installing the controller)"
+  value       = azurerm_user_assigned_identity.alb.client_id
+}

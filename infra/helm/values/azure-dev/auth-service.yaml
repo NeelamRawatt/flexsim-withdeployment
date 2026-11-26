@@ -44,6 +44,13 @@ keyVault:
     APP_BOOTSTRAP_DEVELOPER_PASSWORD: auth-developer-password
     APP_BOOTSTRAP_WORKER_PASSWORD: auth-worker-password
 
+# Behind the shared main gate: requests starting with these paths come to this service
+gateway:
+  enabled: true
+  paths:
+    - "/api/auth"
+    - "/api/users"
+
 # Non-secret settings -> ConfigMap -> environment variables
 config:
   # Dev DB (B1ms) allows only 50 connections in total. Spring's default is 10 per service,

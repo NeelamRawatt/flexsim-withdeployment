@@ -1,0 +1,39 @@
+{{- /*
+=====================================================================
+healthcheckpolicy.yaml   (folder: infra\helm\flexsim-service\templates)
+How the main gate checks that this service is alive BEFORE sending visitors to it.
+Default check is "/" (our Spring apps answer 401/404 there -> "unhealthy"),
+so we point it to Spring Boot's readiness page instead.
+(HealthCheckPolicy is Application Gateway for Containers' own Kubernetes object.)
+Made ONLY when gateway.enabled = true (Azure).
+=====================================================================
+*/ -}}
+{{- if .Values.gateway.enabled }}
+apiVersion: alb.networking.azure.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: {{ include "flexsim-service.name" . }}-health
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "flexsim-service.labels" . | nindent 4 }}
+spec:
+  # Which Service this check is for
+  targetRef:
+    group: ""
+    kind: Service
+    name: {{ include "flexsim-service.name" . }}
+    namespace: {{ .Release.Namespace }}
+  default:
+    interval: 10s            # check every 10 seconds
+    timeout: 5s              # no answer in 5 s = failed check
+    healthyThreshold: 1      # 1 good answer  -> healthy
+    unhealthyThreshold: 3    # 3 bad answers  -> unhealthy (no visitors sent)
+    port: {{ include "flexsim-service.port" . }}
+    http:
+      path: {{ .Values.gateway.healthPath }}
+      match:
+        statusCodes:
+          - start: 200
+            end: 299
+    useTLS: false            # inside the network the call is plain http
+{{- end }}

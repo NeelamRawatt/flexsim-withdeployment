@@ -23,7 +23,7 @@ type: application
 #   PATCH 0.1.0 -> 0.1.1  small fix, nothing breaks
 #   MINOR 0.1.1 -> 0.2.0  new option added, old values still work
 #   MAJOR 0.2.0 -> 1.0.0  old values files must be changed
-version: 0.2.0   # 0.2.0: Azure features (service account, workload identity, Key Vault) behind switches
+version: 0.3.0   # 0.3.0: gateway routing (HTTPRoute + HealthCheckPolicy) behind a switch
 
 # appVersion = the version of the APP inside. Only a label, shown in "helm list".
 # Our 5 services each have their OWN image tag (set in each values file),

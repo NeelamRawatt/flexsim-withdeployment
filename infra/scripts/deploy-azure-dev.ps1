@@ -45,6 +45,15 @@ Write-Host "workload identity client id + tenant id read from Terraform (OK)" -F
 # ---- 3) Namespace (create if missing) ----
 kubectl create namespace $Namespace --dry-run=client -o yaml | kubectl apply -f - | Out-Null
 
+# ---- 3b) The ONE shared front door (Gateway). Its Azure gateway ID changes after every
+#          rebuild, so we fill __ALB_ID__ from the Terraform output and apply it. ----
+$albId = terraform "-chdir=$TfDir" output -raw alb_id
+if ([string]::IsNullOrWhiteSpace($albId)) { throw "Could not read Terraform output alb_id (is gateway.tf applied?)" }
+$gatewayYaml = (Get-Content (Join-Path $Root "infra\k8s\azure-dev\gateway.yaml") -Raw).Replace("__ALB_ID__", $albId)
+$gatewayYaml | kubectl apply -f -
+if ($LASTEXITCODE -ne 0) { throw "Could not apply the Gateway (is the ALB Controller installed?)" }
+Write-Host "shared Gateway applied (OK)" -ForegroundColor Cyan
+
 # ---- 4) Deploy each service, one at a time ----
 foreach ($svc in $Services) {
     Write-Host "===== $svc =====" -ForegroundColor Cyan
@@ -66,3 +75,8 @@ foreach ($svc in $Services) {
 Write-Host "===== result =====" -ForegroundColor Green
 helm list -n $Namespace
 kubectl -n $Namespace get pods
+kubectl -n $Namespace get gateway,httproute
+$fqdn = terraform "-chdir=$TfDir" output -raw alb_frontend_fqdn
+Write-Host ""
+Write-Host "Public address of the main gate:  http://$fqdn" -ForegroundColor Green
+Write-Host "Test:  http://$fqdn/api/auth/...   (the gateway may need 1-3 minutes after the first deploy)" -ForegroundColor Green

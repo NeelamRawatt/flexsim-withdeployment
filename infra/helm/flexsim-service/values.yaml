@@ -160,3 +160,15 @@ strategy:
   rollingUpdate:
     maxSurge: 25%
     maxUnavailable: 25%
+
+# gateway: put this service behind the shared main gate (Azure Application Gateway for Containers).
+#   enabled    = make the HTTPRoute + HealthCheckPolicy (Azure only; laptop: OFF)
+#   name       = the shared Gateway object (created once by deploy-azure-dev.ps1)
+#   paths      = URL prefixes that belong to this service, e.g. ["/api/auth", "/api/users"]
+#   healthPath = what the gateway calls to check the service is alive
+#                (the default "/" answers 401/404 in our apps -> would look "broken")
+gateway:
+  enabled: false
+  name: flexsim-gateway
+  paths: []
+  healthPath: /actuator/health/readiness
