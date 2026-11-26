@@ -120,6 +120,6 @@ variable "aks_node_count" {
 }
 
 variable "github_repo" {
-  description = "GitHub repository allowed to deploy (owner/name), e.g. NeelamRawatt/flexsim-withdeployment"
+  description = "GitHub repository allowed to deploy, exactly as in GitHub OIDC subject: owner@ownerId/repo@repoId"
   type        = string
 }
